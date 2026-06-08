@@ -283,25 +283,25 @@ Exit criteria:
 - Frozen-wallet restrictions are enforced at backend level.
 - Audit log records admin account-control actions.
 
-## Phase 6: QR Payments And Notifications
+## Phase 6: Customer-Presented QR Refinements And Notifications
 
-Goal: deepen mobile-native payment and notification features.
+Goal: deepen mobile-native QR experiences and notification features after the first transfer and merchant QR payment slices already work.
 
 Deliverables:
 
-- Customer QR payment request generation.
-- Customer QR scan payment flow.
-- Merchant QR payment refinements.
+- Customer-presented QR payment request generation for later peer payment flows.
+- Customer QR scan payment refinements beyond the Phase 4B transfer QR slice.
+- Merchant QR payment refinements beyond the Phase 4C fixed-amount merchant-presented slice.
 - Notification Service.
 - In-app notification center.
 - Optional push notification adapter.
 
 Core flows:
 
-- Customer generates QR payment request.
-- Another customer scans and pays.
-- Customer pays an approved merchant.
-- Both customers receive transaction notifications.
+- Customer generates a customer-presented QR payment request.
+- Another customer scans and pays through the refined QR flow.
+- Existing merchant QR payment flow sends notifications.
+- Both customers or customer and merchant receive transaction notifications.
 
 Exit criteria:
 

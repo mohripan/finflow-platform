@@ -6,6 +6,37 @@ This document defines the first REST API contract for FinFlow before OpenAPI fil
 
 These contracts are intentionally implementation-facing. They should later be converted into OpenAPI specs under `contracts/openapi/`.
 
+## OpenAPI Conversion Rules
+
+When implementation starts, each gateway-facing service API must have an OpenAPI spec under:
+
+```text
+contracts/openapi/<service-name>/openapi.yaml
+```
+
+Rules:
+
+- Specs must use OpenAPI 3.1 unless tooling limitations require OpenAPI 3.0.
+- The prose contract in this document remains the baseline until a service-specific OpenAPI file exists.
+- Once an OpenAPI file exists, changes to endpoint paths, request bodies, response bodies, status codes, headers, auth roles, or error codes must update both the service implementation and the spec in the same change.
+- Public path parameters must be named with public identifier semantics, for example `merchantPublicId`, `walletPublicId`, or `transactionPublicReference`.
+- Every operation must include the common success or error envelope shape.
+- Every money-moving command must document the required `Idempotency-Key` header.
+- Every authenticated operation must document bearer-token security.
+- Error responses must reference shared error envelope components and list expected business error codes where practical.
+- Generated clients may be produced from OpenAPI specs, but generated artifacts should not be committed unless a later build decision explicitly requires it.
+- CI should lint OpenAPI files and fail on invalid specs once `contracts/openapi/` exists.
+
+Recommended shared components:
+
+- `ApiResponse`
+- `ApiError`
+- `ApiMeta`
+- `PageInfo`
+- `MoneyDto`
+- `AuditDecisionDto`
+- `DocumentMetadataDto`
+
 ## API Principles
 
 1. All public APIs are routed through Spring Cloud Gateway.

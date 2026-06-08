@@ -360,14 +360,17 @@ Candidate sagas/process managers:
 - `MerchantOnboardingSaga`
 - `FraudReviewSaga`
 
-Candidate events:
+Candidate domain events:
+
+These names are conceptual workflow events for Axon modeling. Kafka integration event names and payloads are governed by [docs/EVENT_CONTRACTS.md](docs/EVENT_CONTRACTS.md). When implementation starts, prefer the contract names where the same business fact is published externally.
 
 - `UserProfileCreated`
 - `KycSubmitted`
 - `KycApproved`
 - `KycRejected`
 - `MerchantRegistered`
-- `MerchantApproved`
+- `KybApproved`
+- `MerchantActivated`
 - `MerchantPaymentRequested`
 - `MerchantPaymentCompleted`
 - `MerchantWithdrawalRequested`
@@ -382,14 +385,12 @@ Candidate events:
 - `WalletCreated`
 - `WalletFrozen`
 - `TopUpRequested`
-- `PaymentAuthorized`
+- `PaymentPaid`
 - `PaymentFailed`
 - `TransferRequested`
-- `FundsDebited`
-- `FundsCredited`
 - `LedgerJournalPosted`
 - `TransferCompleted`
-- `SuspiciousTransactionDetected`
+- `FraudReviewRequired`
 - `NotificationRequested`
 
 ## Kafka Integration Model
