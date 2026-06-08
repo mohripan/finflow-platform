@@ -142,54 +142,116 @@ Exit criteria:
 - Wallet balance can be rebuilt from ledger entries.
 - Duplicate transfer/top-up requests do not double-credit or double-debit.
 
-## Phase 4: Top-Up, Transfer, And Merchant Payment MVP
+## Phase 4A: Top-Up Vertical Slice
 
-Goal: deliver the first complete customer and merchant money movement demo.
+Goal: deliver the first complete money-in flow with real workflow, ledger, idempotency, events, and UI integration.
 
 Deliverables:
 
-- Transaction Service.
-- Payment Service with simulated gateway.
-- Generic payment-provider simulation.
+- Transaction Service baseline.
+- Payment Service with generic simulated payment instruction.
 - Axon command and event flow for top-up.
-- Axon command and event flow for peer transfer.
-- Axon command and event flow for merchant QR payment.
-- Axon command and event flow for merchant withdrawal.
-- Axon command and event flow for refund.
-- Configurable flat merchant payment fee accounting.
-- Admin refund approval flow.
-- Kafka Avro integration events for transaction, ledger, payment, reporting, and notification consumers.
-- Schema Registry validation for published event contracts.
-- React Native wallet dashboard.
-- React Native top-up screen.
-- React Native transfer screen.
-- React Native merchant payment screens.
-- React Native merchant withdrawal screen.
-- React Native refund request screen for merchants.
-- Transaction history projection.
+- Ledger journal posting for top-up.
+- Kafka Avro events for transaction, payment, ledger, wallet projection, audit, and notification/reporting consumers needed by the slice.
+- Schema Registry validation for schemas used by the slice.
+- React Native wallet dashboard and top-up screen.
+- Transaction history projection for top-up.
 
 Core flows:
 
-- Customer tops up wallet.
-- Customer transfers to another customer.
-- Merchant generates a QR payment request.
-- Customer pays merchant by QR.
-- Merchant withdraws business balance through the generic payout simulation.
-- Merchant requests full refund for a completed merchant payment.
-- Admin approves refund before ledger reversal is posted.
-- Transaction status updates from pending to completed or failed.
-- Ledger entries are created for successful movements.
+- Customer requests top-up with idempotency key.
+- Payment simulation marks instruction paid, failed, or expired.
+- Successful payment posts balanced ledger entries.
+- Wallet projection updates from ledger event.
 
 Exit criteria:
 
-- End-to-end demo works from mobile app to backend.
-- Merchant QR payment demo works from mobile app to backend.
-- Merchant withdrawal demo works from mobile app to backend.
-- Refund demo works from mobile app to backend.
+- End-to-end top-up works from mobile app to backend.
+- Duplicate top-up requests do not double-credit.
+- Failed/expired payment does not change wallet balance.
+- Tests cover idempotency, ledger balance, payment failure, and projection update.
+- Contract tests prevent incompatible Kafka events for the slice.
+
+## Phase 4B: Customer Transfer Vertical Slice
+
+Goal: deliver QR-based customer-to-customer transfer with authoritative ledger balance enforcement.
+
+Deliverables:
+
+- Transfer QR token workflow.
+- Axon command and event flow for peer transfer.
+- Ledger posting with serialized debit-account balance validation.
+- React Native transfer QR generation and scan/pay flow.
+- Transaction history for sender and recipient.
+
+Core flows:
+
+- Recipient generates transfer QR.
+- Sender scans QR, enters amount, and confirms.
+- Ledger Service rejects insufficient funds under concurrent debit attempts.
+- Sender and recipient see completed transaction history.
+
+Exit criteria:
+
+- End-to-end transfer works from mobile app to backend.
+- Concurrent duplicate or competing transfer attempts cannot overspend.
+- Tests cover duplicate idempotency key, idempotency conflict, insufficient funds, self-transfer rejection, and frozen-wallet rejection.
+
+## Phase 4C: Merchant QR Payment Vertical Slice
+
+Goal: deliver merchant-presented fixed-amount QR payment with fee accounting.
+
+Deliverables:
+
+- Merchant QR payment request workflow.
+- Axon command and event flow for merchant payment.
+- Authoritative merchant active validation at payment confirmation.
+- Configurable flat merchant payment fee accounting.
+- React Native merchant payment screens.
+- Merchant incoming payment history.
+
+Core flows:
+
+- Merchant generates fixed-amount QR payment request.
+- Customer scans and confirms payment.
+- Ledger posts customer gross debit, merchant net credit, and fee revenue credit.
+- Customer and merchant receive transaction history updates.
+
+Exit criteria:
+
+- Merchant QR payment works end to end.
+- QR cannot be paid twice.
 - Ledger entries include merchant payment fee accounting.
-- Transaction history shows successful and failed records.
-- Test suite covers duplicate request and insufficient funds cases.
-- Contract tests prevent services from publishing incompatible Kafka events.
+- Tests cover expired QR, already-paid QR, suspended merchant, insufficient funds, fee greater than amount, and idempotency replay.
+
+## Phase 4D: Merchant Withdrawal And Refund Vertical Slice
+
+Goal: deliver payout and refund flows that prove pending balance and reversal accounting.
+
+Deliverables:
+
+- Axon command and event flow for merchant withdrawal.
+- Generic payout simulation and callback handling.
+- Pending withdrawal ledger movement into payout clearing.
+- Failed payout reversal journal.
+- Merchant refund request workflow.
+- Admin refund approval flow.
+- Full merchant payment refund reversal accounting.
+- React Native merchant withdrawal and refund request screens.
+
+Core flows:
+
+- Merchant withdraws business balance through generic payout simulation.
+- Withdrawal enters pending state and completes or reverses after callback.
+- Merchant requests full refund for completed merchant payment.
+- Admin approves refund before ledger reversal is posted.
+
+Exit criteria:
+
+- Merchant withdrawal works end to end with success and failure callbacks.
+- Refund works end to end after admin approval.
+- Full refund debits merchant net, debits fee revenue, and credits customer gross payment.
+- Tests cover duplicate payout callback, failed payout reversal, insufficient merchant net balance for refund, duplicate refund rejection, and audit records for admin decisions.
 
 ## Phase 5: Fraud, Limits, And Account Controls
 
@@ -310,10 +372,13 @@ Exit criteria:
 4. Build User Service.
 5. Build KYC and Merchant onboarding.
 6. Build Wallet and Ledger services.
-7. Build Transaction and Payment services.
-8. Build React Native wallet and merchant flows.
-9. Build React admin dashboard.
-10. Add fraud, reporting, observability, and Helm deployment.
+7. Build top-up Transaction and Payment slice.
+8. Build customer transfer slice.
+9. Build merchant QR payment slice.
+10. Build merchant withdrawal and refund slice.
+11. Build React Native wallet and merchant flows alongside each backend slice.
+12. Build React admin dashboard for review, refund, fraud, and reporting workflows.
+13. Add fraud, reporting, observability, and Helm deployment.
 
 ## Team Leadership Framing
 

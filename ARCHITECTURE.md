@@ -186,7 +186,7 @@ Responsibilities:
 - Wallet creation.
 - Current available and pending wallet balance projections.
 - Wallet status: active, frozen, closed.
-- Available balance checks.
+- Available balance display and non-authoritative pre-checks.
 - Projection updates from posted ledger journals and payout/refund workflow events.
 
 Primary database: PostgreSQL.
@@ -194,7 +194,8 @@ Primary database: PostgreSQL.
 Important rule:
 
 - Wallet balance is not the source of truth. The immutable ledger is the financial source of truth.
-- Instant money movements are protected through Transaction Service idempotency, Ledger Service duplicate-journal protection, database constraints, and serialized/locked validation of authoritative balances. Wallet Service must not create independent balance-only reservations for completed transfer or merchant payment flows.
+- Instant money movements are protected through Transaction Service idempotency, Ledger Service duplicate-journal protection, database constraints, and serialized Ledger Service validation of authoritative balances. Wallet Service must not create independent balance-only reservations for completed transfer or merchant payment flows.
+- Wallet Service may provide projection pre-checks for user experience, but Ledger Service is the only service that can reject or accept a debit for insufficient authoritative posted balance.
 - Pending money movements, such as merchant withdrawal, are represented by posted ledger movement into clearing accounts and exposed through pending balance projections.
 
 ### Ledger Service
@@ -208,6 +209,8 @@ Responsibilities:
 - Accounting reports.
 - Duplicate journal protection by transaction step reference.
 - Reversal journals for failed payout, refund, and correction workflows.
+- Authoritative account-balance validation during journal posting.
+- Idempotent bootstrap of system accounts such as payment clearing, payout clearing, fee revenue, and suspense.
 
 Primary database: PostgreSQL.
 
@@ -216,19 +219,37 @@ Rules:
 - Every financial transaction must balance.
 - Ledger entries are append-only.
 - Corrections are represented by reversal entries, not updates.
+- Debit and credit entry amounts are always positive. Direction carries accounting meaning.
+- Journal posting serializes affected ledger accounts, calculates balances from posted entries inside the same transaction, and rejects insufficient funds for wallet and merchant-balance accounts.
 
 Example transfer:
 
 ```text
-Debit:  Customer A wallet account  -100000 IDR
-Credit: Customer B wallet account  +100000 IDR
+Debit:  Customer A wallet account  100000 IDR
+Credit: Customer B wallet account  100000 IDR
 ```
 
 Example top-up:
 
 ```text
-Debit:  External payment clearing account
-Credit: Customer wallet account
+Debit:  External payment clearing account  100000 IDR
+Credit: Customer wallet account            100000 IDR
+```
+
+Example merchant payment with fee:
+
+```text
+Debit:  Customer wallet account           50000 IDR
+Credit: Merchant business balance account 49000 IDR
+Credit: Fee revenue account                1000 IDR
+```
+
+Example full merchant payment refund:
+
+```text
+Debit:  Merchant business balance account 49000 IDR
+Debit:  Fee revenue account                1000 IDR
+Credit: Customer wallet account           50000 IDR
 ```
 
 ### Transaction Service
@@ -395,6 +416,7 @@ Initial topics:
 - `finflow.payment.events`
 - `finflow.fraud.events`
 - `finflow.notification.events`
+- `finflow.audit.events`
 
 Kafka message rules:
 
@@ -449,14 +471,15 @@ Redis must not be the source of truth for financial state.
 
 External APIs are RESTful JSON APIs behind Spring Cloud Gateway.
 
-Internal coordination should prefer Axon commands/events for command workflows, Kafka for broad integration events, and direct REST only for simple synchronous queries that are genuinely required.
+Internal coordination uses Axon commands/events/queries for financial command workflows, Kafka for broad integration events, and direct REST only for gateway-facing APIs, admin APIs, non-financial lookups, or operational support endpoints.
 
 Workflow communication rules:
 
 - Axon commands carry intent inside stateful workflows, such as post journal, create payment instruction, activate wallet, or retry a reviewed transaction.
+- Axon queries or command responses carry bounded immediate decisions needed before money moves, such as wallet status, merchant active state, fraud result, and ledger posting result.
 - Axon events represent accepted workflow/domain facts and drive sagas or process managers.
 - Kafka events are Avro integration facts published after commit for reporting, notifications, audit streams, analytics, and cross-service projections.
-- Kafka events must not be used as request commands for financial correctness. A service that needs another service to make an immediate decision should use an Axon command or an authenticated internal REST validation endpoint.
+- Kafka events must not be used as request commands for financial correctness. A service that needs another service to make an immediate financial decision must use Axon command/query semantics and fail closed on timeout.
 
 API contracts should be documented with OpenAPI per service.
 

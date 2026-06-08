@@ -53,6 +53,8 @@ Use separate identifiers for separate concerns:
 
 Never expose database sequence IDs.
 
+Public API routes use public IDs or public references. Internal UUID primary keys remain inside the owning service database unless a documented trusted workflow command explicitly carries them.
+
 ### Auditability
 
 For regulated-style workflows:
@@ -179,11 +181,13 @@ Edge cases:
 
 Represents customer lifecycle state.
 
+This status is separate from `KycApplication.status`. User Service may mirror KYC outcomes for customer lifecycle gating, but KYC Service remains the authority for verification review state.
+
 Fields:
 
 - `id`
 - `userProfileId`
-- `status`: `REGISTERED`, `KYC_SUBMITTED`, `KYC_APPROVED`, `KYC_REJECTED`, `KYC_RESUBMISSION_REQUIRED`, `KYC_LOCKED`, `WALLET_ACTIVE`, `FROZEN`, `CLOSED`
+- `status`: `REGISTERED`, `KYC_IN_REVIEW`, `KYC_APPROVED`, `KYC_REJECTED`, `KYC_RESUBMISSION_REQUIRED`, `KYC_LOCKED`, `WALLET_ACTIVE`, `FROZEN`, `CLOSED`
 - `kycApplicationId`
 - `walletId`
 - `createdAt`
@@ -267,6 +271,8 @@ Rules:
 
 Represents a business account.
 
+This status is separate from `KybApplication.status`. Merchant Service owns both, but the merchant account lifecycle and the KYB review lifecycle must not be collapsed into one enum in implementation.
+
 Fields:
 
 - `id`
@@ -275,7 +281,7 @@ Fields:
 - `merchantName`
 - `businessCategory`
 - `businessType`: `INDIVIDUAL`, `CV`, `PT`, `COOPERATIVE`, `OTHER`
-- `status`: `REGISTERED`, `KYB_SUBMITTED`, `KYB_APPROVED`, `ACTIVE`, `SUSPENDED`, `CLOSED`
+- `status`: `REGISTERED`, `KYB_IN_REVIEW`, `KYB_APPROVED`, `ACTIVE`, `SUSPENDED`, `CLOSED`
 - `kybApplicationId`
 - `businessWalletId`
 - `withdrawalDestinationId`
@@ -285,7 +291,7 @@ Fields:
 
 Rules:
 
-- Owner must have approved KYC before KYB can be approved.
+- Owner must have approved KYC before KYB can be submitted or approved.
 - Merchant cannot receive payments unless `ACTIVE`.
 - Suspended merchant cannot generate payment QR or withdraw.
 
@@ -406,12 +412,12 @@ Rules:
 - Projection can be rebuilt from ledger entries.
 - Projection must never be the financial source of truth.
 - Pending withdrawal reduces available balance and increases pending balance until callback completes or fails.
-- Instant money movements such as transfer and merchant payment do not use a separate wallet reservation in MVP; they rely on Transaction Service idempotency, authoritative Ledger Service posting, database constraints, and locked/serialized balance validation to prevent double spend.
+- Instant money movements such as transfer and merchant payment do not use a separate wallet reservation in MVP. Wallet Service may perform status and projection pre-checks, but Ledger Service makes the authoritative balance sufficiency decision during serialized journal posting.
 - Pending money movements such as merchant withdrawal are represented by posted ledger journals that move funds into clearing accounts, not by mutable balance-only holds.
 
 Edge cases:
 
-- Projection lag: API may show `lastUpdatedAt`; critical validations should query authoritative state or use locked transaction logic.
+- Projection lag: API may show `lastUpdatedAt`; critical balance validation must be handled by Ledger Service during journal posting.
 - Negative available balance is never allowed.
 
 ## Ledger Service Models
@@ -437,6 +443,8 @@ Rules:
 
 - Ledger accounts are not deleted.
 - Closed accounts cannot receive ordinary new journals except reversals/corrections.
+- System accounts for `PAYMENT_CLEARING`, `PAYOUT_CLEARING`, `FEE_REVENUE`, and `SUSPENSE` are created idempotently per currency by migration or controlled service bootstrap before money movement is enabled.
+- System account uniqueness is enforced by `ownerType + accountType + currency` where applicable.
 
 ### LedgerJournal
 
@@ -463,6 +471,8 @@ Rules:
 - `totalDebitMinor` must equal `totalCreditMinor`.
 - Posted journals are immutable.
 - Reversal creates a new journal; it does not mutate the original.
+- Posting a journal serializes all affected ledger accounts and calculates authoritative account balances from posted entries inside the same transaction.
+- Wallet and merchant-balance accounts must not be debited below zero except through explicitly approved correction flows documented by an ADR.
 
 Edge cases:
 
@@ -632,6 +642,7 @@ Rules:
 Edge cases:
 
 - Merchant balance insufficient: refund remains failed/rejected and no ledger entries post.
+- Full merchant payment refund requires merchant balance to cover the original merchant net amount. Fee revenue reversal is posted against the fee revenue account and is not charged again to the merchant.
 - Original payment already refunded: reject duplicate refund.
 - Customer wallet frozen: refund credit is allowed.
 
@@ -828,13 +839,15 @@ Rules:
 
 - Flat fee must not exceed payment amount.
 - If fee equals amount, merchant net amount is zero; decide by config whether this is allowed.
-- Fee ledger entry must post in the same journal as merchant payment or in a linked fee journal.
+- Fee ledger entry must post in the same journal as merchant payment.
+- Full refund reverses the original fee revenue credit by debiting fee revenue and crediting the customer as part of the gross refund reversal.
 
 ### Refund
 
 - Refund amount cannot exceed original payment amount minus already refunded amount.
 - MVP full refund means no previous refund exists and amount equals original payment amount.
 - Refund failure after admin approval must leave original payment untouched.
+- Full refund journal debits merchant business balance for the original merchant net amount, debits fee revenue for the original flat fee amount, and credits customer wallet for the original gross payment amount.
 
 ### Admin Retry
 

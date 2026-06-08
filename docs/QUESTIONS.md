@@ -192,12 +192,26 @@ Answered:
 16. Avro compatibility mode: backward.
 17. KYB ownership: Merchant Service owns merchant KYB applications, KYB documents, review state, and withdrawal destinations. KYC Service owns personal KYC only.
 18. Document uploads: KYC/KYB documents use short-lived signed object upload URLs with metadata/checksum verification. Backend services store metadata and object references, not document bytes.
-19. Money-movement consistency: instant transfer and merchant payment do not use wallet-only reservations. They rely on transaction idempotency, authoritative ledger posting, duplicate journal protection, database constraints, and locked or serialized balance validation.
+19. Money-movement consistency: instant transfer and merchant payment do not use wallet-only reservations. Wallet Service may provide status/projection pre-checks, but Ledger Service makes the authoritative balance sufficiency decision during serialized journal posting.
 20. Pending withdrawals: pending balance is backed by ledger movement into payout clearing. Failed payout requires a reversal journal before pending balance is released.
 21. Workflow communication: Axon commands/events and sagas coordinate financial workflows. Kafka Avro events are committed integration facts for projections, notifications, audit streams, and reporting, not financial command messages.
 22. Fraud review retry: admin fraud-review retry belongs with the Fraud, Limits, And Account Controls phase, not the first money-movement phase.
 23. Mobile state management: Redux Toolkit is the selected mobile app/workflow state layer. TanStack Query may still be used for server-state fetching and caching.
 24. Local tracing: Jaeger is the selected local distributed tracing backend.
+25. Internal financial workflow communication: Axon command/query semantics are the default for immediate financial decisions across bounded contexts. Internal REST is reserved for gateway-facing APIs, non-financial lookups, and operational support endpoints.
+26. Fraud evaluation: Transaction workflows must receive `ALLOW`, `REVIEW`, or `BLOCK` from Fraud Service through Axon command/query semantics before ledger posting. Timeout or unavailable Fraud Service fails closed.
+27. Merchant active validation: Merchant Service is authoritative at payment confirmation time. Event-cached merchant state is allowed only for UI pre-checks or non-authoritative projections.
+28. Audit architecture: local per-service audit tables are mandatory from the first implementation and are the source of truth. Centralized audit Kafka events are published through outbox for search/reporting.
+29. Document review URLs: KYC Service and Merchant Service generate signed upload and review URLs for documents they own. A dedicated document-access service is not part of the baseline.
+30. API identifiers: public APIs accept and return public IDs or public references. Internal UUID primary keys remain inside owning service databases.
+31. Admin transaction search: baseline search avoids raw PII filters and uses public references, public IDs, statuses, types, dates, and masked identifiers.
+32. Client aggregation: mobile and admin clients use gateway routes to owning services first. A BFF requires a later ADR.
+33. Avro modules: generated Avro classes live in per-domain contract modules plus a common module.
+34. Kafka topics: baseline uses one topic per domain. Event families are separated by schema subject and event type.
+35. Ledger events: `LedgerJournalPosted` includes non-sensitive entry summaries so Wallet and Reporting projections do not query Ledger Service for routine updates.
+36. Refund accounting: full merchant payment refunds reverse merchant net, fee revenue, and customer gross payment. Keeping fee revenue on refunds requires a later explicit product/accounting decision.
+37. KYB prerequisite: merchant owner KYC approval is required before KYB submission is accepted.
+38. Roadmap slicing: money movement implementation is split into top-up, transfer, merchant payment, and withdrawal/refund vertical slices.
 
 Contract decision:
 
@@ -207,6 +221,7 @@ Contract decision:
 - Consumers deserialize through Schema Registry and must be idempotent.
 - CI should validate schema compatibility so a service cannot send garbage or break consumers silently.
 - Schema Registry compatibility mode is backward.
+- Avro schemas use per-domain modules, common value schemas, logical timestamp-millis, nullable fields with explicit defaults, and enum defaults with `UNKNOWN` where tooling supports it.
 
 Remaining questions:
 

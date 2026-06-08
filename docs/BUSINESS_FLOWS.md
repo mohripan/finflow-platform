@@ -62,61 +62,90 @@ An internal operations user who can:
 
 ### Compliance Reviewer
 
-A stricter admin role used later for:
+A stricter admin role used for:
 
 - Enhanced due diligence.
 - Suspicious activity review.
 - Manual risk decisions.
 - Exportable audit evidence.
 
-For MVP, this role can be represented by an admin permission subset.
+Compliance has distinct permissions for sensitive unlock, fraud, and evidence review actions.
 
 ## Account Lifecycle
 
 ### Customer Account States
 
+Customer account status is owned by User Service and represents whether the customer account can use wallet features. KYC application status is owned by KYC Service and is tracked separately.
+
 ```text
 REGISTERED
-  -> KYC_SUBMITTED
+  -> KYC_IN_REVIEW
   -> KYC_APPROVED
   -> WALLET_ACTIVE
   -> FROZEN
   -> CLOSED
 
-KYC_SUBMITTED
+KYC_IN_REVIEW
   -> KYC_REJECTED
   -> KYC_RESUBMISSION_REQUIRED
+  -> KYC_LOCKED
 ```
 
 Rules:
 
 - `REGISTERED` customers can sign in and submit KYC, but cannot transact.
+- `KYC_IN_REVIEW` mirrors that KYC Service has an application in `PENDING_REVIEW`.
 - `KYC_APPROVED` customers are eligible for wallet activation.
 - `WALLET_ACTIVE` customers can top up, transfer, and pay merchants.
 - `FROZEN` customers can sign in and view history but cannot initiate money movement.
 - `CLOSED` customers cannot transact and should only retain audit/history access where required.
 
-### Merchant Account States
+KYC application statuses are:
 
 ```text
-MERCHANT_REGISTERED
-  -> KYB_SUBMITTED
-  -> KYB_APPROVED
-  -> MERCHANT_ACTIVE
-  -> MERCHANT_SUSPENDED
-  -> MERCHANT_CLOSED
+NOT_SUBMITTED
+  -> PENDING_REVIEW
+  -> APPROVED
+  -> REJECTED
+  -> RESUBMISSION_REQUIRED
+  -> LOCKED
+```
 
-KYB_SUBMITTED
+### Merchant Account States
+
+Merchant account status is owned by Merchant Service and represents the business account lifecycle. KYB application status is a separate review workflow owned by Merchant Service.
+
+```text
+REGISTERED
+  -> KYB_IN_REVIEW
+  -> KYB_APPROVED
+  -> ACTIVE
+  -> SUSPENDED
+  -> CLOSED
+
+KYB_IN_REVIEW
   -> KYB_REJECTED
   -> KYB_RESUBMISSION_REQUIRED
+  -> KYB_LOCKED
 ```
 
 Rules:
 
 - Merchants cannot receive payments before KYB approval.
-- A merchant owner must have approved personal KYC before business KYB can be approved.
-- `MERCHANT_ACTIVE` merchants can generate QR payment requests and receive payments.
-- `MERCHANT_SUSPENDED` merchants cannot receive new payments or withdraw.
+- A merchant owner must have approved personal KYC before business KYB can be submitted or approved.
+- `ACTIVE` merchants can generate QR payment requests and receive payments.
+- `SUSPENDED` merchants cannot receive new payments or withdraw.
+
+KYB application statuses are:
+
+```text
+NOT_SUBMITTED
+  -> PENDING_REVIEW
+  -> APPROVED
+  -> REJECTED
+  -> RESUBMISSION_REQUIRED
+  -> LOCKED
+```
 
 ## Customer Onboarding Flow
 
@@ -154,12 +183,12 @@ Rules:
    - Storefront or business proof document.
    - Bank account or wallet destination for withdrawals.
    - Owner identity linkage.
-5. Merchant Service creates or updates the merchant profile to `KYB_SUBMITTED`.
+5. Merchant Service creates or updates the merchant profile to `KYB_IN_REVIEW` and the KYB application to `PENDING_REVIEW`.
 6. Merchant Service records KYB review data and document metadata. KYC Service remains responsible only for the owner personal KYC status.
 7. Admin reviews KYB documents and business details.
 8. Admin approves, rejects, or requests resubmission.
 9. On approval:
-   - Merchant becomes `MERCHANT_ACTIVE`.
+   - Merchant becomes `ACTIVE`.
    - Merchant business balance account is created.
    - Merchant can generate QR payment requests.
 
@@ -202,11 +231,11 @@ Failure cases:
    - Recipient exists.
    - Recipient KYC is approved.
    - Recipient wallet is active.
-   - Sender has sufficient available balance.
+   - Sender has sufficient available balance according to the authoritative ledger posting check.
    - Amount is within limits.
    - Fraud rules do not require blocking.
 6. Transaction Service requests an authoritative ledger post after wallet, limit, idempotency, and fraud checks pass.
-7. Ledger Service posts the balanced journal exactly once for the transaction step:
+7. Ledger Service posts the balanced journal exactly once for the transaction step after serializing affected ledger accounts and confirming sufficient posted balance:
    - Debit sender wallet account.
    - Credit recipient wallet account.
 8. Transaction Service marks transfer as completed.
@@ -237,7 +266,7 @@ MVP uses merchant-presented QR, similar in concept to QRIS merchant-presented mo
    - Merchant KYB is approved.
    - Merchant account is active.
    - QR payment request is valid and not expired.
-   - Customer has sufficient balance.
+   - Customer has sufficient balance according to the authoritative ledger posting check.
 8. Ledger Service posts balanced journal:
    - Debit customer wallet account.
    - Credit merchant business balance account net of fee.
@@ -289,8 +318,9 @@ MVP flow:
 4. Refund enters admin approval queue.
 5. Admin approves or rejects refund request.
 6. If approved, Ledger posts reversal journal:
-   - Debit merchant business balance account.
-   - Credit customer wallet account.
+   - Debit merchant business balance account for the original merchant net amount.
+   - Debit fee revenue account for the original flat fee amount.
+   - Credit customer wallet account for the original gross payment amount.
 7. Original transaction remains immutable.
 8. Refund transaction links to original payment.
 
@@ -302,6 +332,8 @@ Rules:
 - Partial refund can be added later.
 - Refund appears as a separate transaction linked to the original payment.
 - Refund ledger entries are posted only after admin approval.
+- Full refund reverses both the merchant net credit and the platform fee revenue credit from the original merchant payment journal so the customer receives the original gross payment amount.
+- Merchant balance sufficiency is checked against the merchant net amount, not against the fee revenue reversal.
 
 ## Admin Review Flow
 

@@ -18,6 +18,7 @@ This document defines business rules that should be enforced by services, tests,
 10. Customer and merchant wallet views show available balance and pending balance.
 11. Fraud `REVIEW` blocks the transaction and requires admin resolution.
 12. FinFlow is not a licensed real-money system; production launch would require legal, compliance, risk, and licensing review.
+13. Ledger Service makes the authoritative balance sufficiency decision during serialized journal posting. Wallet balances are projections and cannot authorize money movement.
 
 ## Roles And Permissions
 
@@ -121,6 +122,7 @@ Optional but recommended data:
 Rules:
 
 - Merchant owner must be an approved customer before merchant KYB can be approved.
+- Merchant owner must be an approved customer before merchant KYB can be submitted.
 - KYB status starts as `NOT_SUBMITTED`.
 - Submitting KYB changes status to `PENDING_REVIEW`.
 - Admin approval changes status to `APPROVED`.
@@ -144,7 +146,7 @@ Rules:
 - Wallet is created after customer KYC approval.
 - Wallet balance is a projection, not the financial source of truth.
 - Ledger is the source of truth.
-- Wallet cannot go below zero.
+- Wallet projection cannot go below zero; Ledger Service prevents negative authoritative posted balance through serialized journal posting.
 - Frozen wallet cannot send money, pay merchants, or withdraw.
 - Frozen wallet can still receive reversal/refund entries.
 - Closed wallet cannot initiate or receive ordinary transactions.
@@ -170,6 +172,9 @@ Rules:
 - Reversals must reference the original journal.
 - Ledger service must reject unbalanced journals.
 - Ledger service must reject duplicate journal IDs.
+- Ledger service must reject insufficient debit-account balance for wallet and merchant balance accounts unless the journal type is an approved correction/reversal that is allowed to debit a system account.
+- Ledger journal posting must serialize affected ledger accounts with row locks, an equivalent pessimistic lock, or serializable transaction semantics.
+- System accounts for payment clearing, payout clearing, fee revenue, and suspense must be bootstrapped idempotently per currency before money movement is enabled.
 
 ## Transaction Rules
 
@@ -225,7 +230,7 @@ Rules:
 - Sender must be KYC approved.
 - Recipient must be KYC approved.
 - Sender and recipient wallets must be active.
-- Sender must have sufficient balance.
+- Sender must have sufficient balance as determined by Ledger Service during journal posting.
 - Sender and recipient cannot be the same wallet.
 - Transfer creates one transaction visible to both parties.
 - Ledger journal debits sender and credits recipient.
@@ -240,8 +245,8 @@ Rules:
 - QR payment request must not be expired.
 - QR payment request must not already be paid.
 - QR payment amount is fixed by the merchant when the QR request is created.
-- Customer must have sufficient balance.
-- Ledger journal debits customer wallet and credits merchant business balance.
+- Customer must have sufficient balance as determined by Ledger Service during journal posting.
+- Ledger journal debits customer wallet, credits merchant business balance for the net amount, and credits fee revenue for the configured flat fee.
 - Configurable merchant payment fee is posted as part of the ledger journal.
 - Merchant sees payment immediately in transaction history after completion.
 
@@ -271,7 +276,8 @@ Rules:
 - Refund must reference the original merchant payment.
 - Refund uses reversal ledger entries.
 - Original payment transaction remains immutable.
-- Refund is blocked if merchant business balance is insufficient.
+- Full refund reverses the original merchant payment accounting: merchant net credit is debited from merchant business balance, original fee revenue is debited from fee revenue, and customer wallet is credited for the gross original payment amount.
+- Refund is blocked if merchant business balance is insufficient for the merchant net amount.
 - Refund is blocked if fraud rules require blocking.
 - Customer wallet can receive a refund even if ordinary outgoing transactions are frozen.
 
@@ -305,6 +311,7 @@ Merchant payment fee rules:
 - Fee is charged to the merchant side in MVP.
 - Fee posts to a fee revenue ledger account.
 - Show fee breakdown before confirmation.
+- Full refund reverses the fee revenue from the original merchant payment. Keeping the fee on refunds can be added later only as an explicit product/accounting decision.
 
 ## Fraud Rules
 
@@ -356,6 +363,14 @@ Audit records must include:
 - Timestamp.
 - Correlation ID.
 - Reason where applicable.
+- Before and after status where a status transition occurred.
+- Idempotency key or transaction reference for money-moving or retry actions where applicable.
+
+Audit persistence rules:
+
+- The owning service writes the local audit record in the same database transaction as the sensitive state change whenever possible.
+- If the service publishes centralized audit events, the audit outbox row is written in the same transaction as the local audit record.
+- Centralized audit events support search and reporting; local audit tables remain the source of truth.
 
 ## Reporting Rules
 
@@ -395,3 +410,5 @@ Rules:
 10. Refunds require admin approval.
 11. Rejection lock limit defaults to 3.
 12. Admin can retry a fraud-review-blocked transaction.
+13. Ledger Service owns authoritative balance sufficiency during journal posting.
+14. Full merchant payment refunds reverse merchant net, fee revenue, and customer gross payment.

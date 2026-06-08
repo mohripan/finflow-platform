@@ -74,6 +74,17 @@ contracts/
 
 Generated Java classes should be produced from these schemas. Services must depend on generated/schema-bound types rather than hand-built maps.
 
+Schema rules:
+
+- Avro namespaces use `com.finflow.contracts.<domain>.v1` for domain events and `com.finflow.contracts.common.v1` for shared records.
+- Contract code is generated into per-domain contract modules, for example `contracts-user`, `contracts-ledger`, and `contracts-transaction`, plus `contracts-common`.
+- Services depend only on the domain contract modules they publish or consume.
+- Timestamps use Avro `long` with logical type `timestamp-millis` in generated schemas. API JSON may still expose ISO-8601 UTC strings.
+- Decimal/floating money types are forbidden. Money uses `long amountMinor` plus `string currency`.
+- Nullable fields use Avro unions with `null` first and an explicit default of `null`.
+- New fields must be optional with defaults unless a new event type/version is introduced.
+- Enums must include `UNKNOWN` as the first symbol and default where Avro tooling supports enum defaults. Adding enum symbols requires consumer review even when Schema Registry marks the schema compatible.
+
 ## Topic Naming
 
 Topic format:
@@ -95,7 +106,7 @@ Initial topics:
 | `finflow.payment.events` | Payment Service | Simulated payment and payout facts |
 | `finflow.fraud.events` | Fraud Service | Fraud decisions and review lifecycle |
 | `finflow.notification.events` | Notification Service | Notification delivery lifecycle |
-| `finflow.audit.events` | Owning services | Optional centralized audit stream |
+| `finflow.audit.events` | Owning services | Centralized audit search/reporting stream |
 
 ## Partitioning
 
@@ -632,11 +643,23 @@ Payload fields:
 - `totalCreditMinor`
 - `postedAt`
 - `entryCount`
+- `entries`
+
+Entry summary fields:
+
+- `ledgerEntryId`
+- `ledgerAccountId`
+- `ownerType`
+- `ownerId`
+- `accountType`
+- `direction`
+- `amount`
 
 Rules:
 
-- Journal details may be queried through Ledger API by authorized admin/compliance users.
-- Events should not include full sensitive memo fields unless required by consumers.
+- Ledger events include non-sensitive entry summaries so Wallet Service and Reporting Service can update projections without calling Ledger Service or reading its database.
+- Entry summaries must not include free-form memo text, raw PII, bank account numbers, document references, or admin-only notes.
+- Full journal details may be queried through Ledger API by authorized admin/compliance users.
 
 Consumers:
 
@@ -1182,6 +1205,8 @@ Rules:
 
 - Local service audit tables remain the source of truth.
 - Audit Kafka events are for centralized reporting/search.
+- Every sensitive state change that writes a local audit record must also write a corresponding audit outbox record in the same local transaction unless the service has an explicit ADR-approved exception.
+- If centralized audit event publishing is delayed or unavailable, the local audit table remains authoritative and the outbox must retry publishing.
 
 ## Event Versioning
 
@@ -1193,6 +1218,8 @@ Rules:
 - Renaming fields is treated as remove plus add and should be avoided.
 - Changing field type is not allowed unless Schema Registry confirms backward compatibility.
 - Enum additions must be reviewed because some consumers may not handle unknown values.
+- Existing event types are not repurposed for different business meaning. Create a new event type when semantics change.
+- Event field names use lower camel case and remain stable after publication.
 
 Schema Registry:
 
@@ -1225,6 +1252,8 @@ Rules:
 - Publish asynchronously from outbox.
 - Mark outbox row as published only after broker acknowledgement.
 - Publisher retries must be safe.
+- Outbox rows must include the schema subject, schema version or ID where available, partition key, correlation ID, causation ID, and producer service name.
+- Outbox publisher failures must be observable through metrics and alerts.
 
 ## Consumer Idempotency
 
@@ -1312,11 +1341,11 @@ Rules:
 - DLQ messages include original topic, partition, offset, event ID, error code, and error message.
 - DLQ reprocessing must be manual or explicitly controlled.
 
-## Open Event Questions
+## Event Decisions
 
-These can be decided during schema generation:
+These decisions are fixed before schema generation:
 
-1. Should audit events be published by every service in MVP, or added after core workflows work?
-2. Should ledger events include entry-level details, or should consumers query Ledger API for details?
-3. Should event type use one topic per domain as documented, or one topic per event family for higher isolation?
-4. Should generated Avro classes live in one shared package or per-domain contract modules?
+1. Every service that records local audit data publishes `AuditActionRecorded` through its outbox for centralized audit search/reporting.
+2. Ledger journal events include non-sensitive entry summaries. Consumers must not call Ledger Service for routine projection updates.
+3. Kafka uses one topic per domain as documented. Event families are separated by schema subject and `eventType`, not by topic, unless throughput or isolation requirements later justify an ADR.
+4. Generated Avro classes live in per-domain contract modules plus a common module. Avoid one large shared contract artifact that forces every service to depend on every schema.

@@ -9,8 +9,8 @@ This document defines what each service owns, what it may decide, what it may ca
 1. A service owns its database schema and nobody else reads or writes it directly.
 2. A service is the only authority for state transitions of its owned models.
 3. Cross-service joins are forbidden.
-4. Synchronous REST calls are allowed only for simple lookups or gateway-facing APIs.
-5. Multi-step business workflows use Axon commands, events, and sagas/process managers.
+4. Public REST calls are for client/admin access through the gateway. Internal REST is allowed only for non-financial queries and operational support APIs.
+5. Multi-step business workflows and financial decisions use Axon commands, events, queries, and sagas/process managers.
 6. Broad integration, reporting, notification fan-out, and analytics use Kafka Avro events.
 7. Kafka events are not the source of truth for money.
 8. Ledger Service is the accounting source of truth.
@@ -286,12 +286,13 @@ Owns:
 Decides:
 
 - Whether wallet is active/frozen/closed.
-- Whether projected available balance is sufficient for non-authoritative fast reads.
+- Whether projected available balance is sufficient for display and non-authoritative pre-checks.
 - How balance projection changes from ledger events.
 
 Does not decide:
 
 - Whether ledger journal is valid.
+- Whether a debit account has sufficient authoritative posted balance.
 - Whether transaction should complete.
 - KYC/KYB approval.
 - Fraud outcome.
@@ -328,7 +329,7 @@ Edge-case ownership:
 - Pending withdrawal reduces available balance and increases pending balance.
 - Failed payout releases pending back to available.
 - Refund credits can increase balance even if wallet outgoing transactions are frozen.
-- Instant transfer and merchant payment flows do not create wallet-only reservations. They rely on Transaction Service idempotency, authoritative Ledger Service posting, and locked or serialized validation to prevent double spend.
+- Instant transfer and merchant payment flows do not create wallet-only reservations. Wallet Service may perform status and projection pre-checks, but the authoritative insufficient-funds decision is made by Ledger Service during journal posting.
 - Pending withdrawal is represented by a posted ledger movement into payout clearing and then projected as pending balance.
 
 Forbidden:
@@ -352,6 +353,7 @@ Decides:
 - Whether a journal can be posted.
 - Whether duplicate journal posting should be rejected or idempotently returned.
 - Whether reversal journal is valid.
+- Whether debit-side ledger accounts have sufficient available posted balance at journal-post time.
 
 Does not decide:
 
@@ -386,6 +388,9 @@ Edge-case ownership:
 - Refund uses reversal entries and does not mutate original journal.
 - Duplicate journal post for same transaction step is idempotent or rejected deterministically.
 - Failed merchant payout must be corrected through a reversal journal from payout clearing back to merchant business balance.
+- Ledger Service serializes journal posting per affected ledger account, using database row locks, an equivalent pessimistic lock, or serializable transaction semantics so two concurrent debits cannot overspend the same account.
+- Ledger account balance used for posting is derived from posted ledger entries inside the same transaction boundary as the journal insert, not from Wallet Service projections or cached balances.
+- System ledger accounts for payment clearing, payout clearing, fee revenue, and suspense are bootstrapped idempotently per currency before money movement is enabled.
 
 Forbidden:
 
@@ -762,9 +767,9 @@ Coordinator:
 Service responsibilities:
 
 - Transaction Service owns transfer request and QR token.
-- Wallet Service validates wallet state/projection.
+- Wallet Service validates wallet state and may provide a projection pre-check.
 - Fraud Service evaluates risk.
-- Ledger Service posts transfer journal.
+- Ledger Service posts the transfer journal and makes the authoritative balance sufficiency decision under account-level serialization.
 - Notification and Reporting consume events.
 
 ### Merchant Payment
@@ -776,9 +781,9 @@ Coordinator:
 Service responsibilities:
 
 - Merchant Service validates merchant active state.
-- Wallet Service validates customer wallet state/projection.
+- Wallet Service validates customer wallet state and may provide a projection pre-check.
 - Fraud Service evaluates risk.
-- Ledger Service posts customer debit, merchant net credit, and fee revenue credit.
+- Ledger Service posts customer debit, merchant net credit, and fee revenue credit, and makes the authoritative balance sufficiency decision under account-level serialization.
 - Transaction Service marks payment complete.
 
 ### Merchant Withdrawal
@@ -806,7 +811,7 @@ Service responsibilities:
 - Merchant initiates refund request.
 - Admin approves/rejects in Transaction Service workflow.
 - Fraud Service may evaluate refund risk.
-- Ledger Service posts reversal only after approval.
+- Ledger Service posts reversal only after approval. A full merchant payment refund reverses the customer gross payment, the merchant net credit, and the fee revenue credit from the original payment journal.
 - Wallet Service updates customer and merchant projections.
 
 ### Fraud Review Retry
@@ -829,7 +834,8 @@ Service responsibilities:
 | Need | Mechanism | Notes |
 | --- | --- | --- |
 | User/mobile/admin request to owning service | REST through Gateway | Gateway handles authentication and coarse role checks; services enforce business rules. |
-| Immediate workflow command between bounded contexts | Axon command or authenticated internal REST | Use for financial decisions that must affect the current command outcome. |
+| Immediate financial workflow command between bounded contexts | Axon command/query with bounded response | Use for ledger posting, fraud evaluation, wallet status validation, merchant active validation, payout/payment instruction creation, and retry decisions. |
+| Operational or non-financial service lookup | Authenticated internal REST | Use only when the result does not decide whether money moves. |
 | Stateful multi-step coordination | Axon saga/process manager | Use for top-up, transfer, merchant payment, withdrawal, refund, onboarding, and fraud retry. |
 | Committed integration fact | Kafka Avro event through outbox | Use after local commit for reporting, notifications, audit streams, and projections. |
 | Query/read projection update | Kafka Avro event consumer | Consumers must be idempotent and must not treat projections as source of truth. |
@@ -842,9 +848,10 @@ Allowed synchronous calls:
 
 - Gateway to backend services.
 - Service to Keycloak metadata/JWKs.
-- Transaction Service to Wallet Service for current wallet validation.
-- Transaction Service to Merchant Service for merchant active validation.
-- Transaction Service to Fraud Service for risk evaluation if not modeled as Axon command.
+- Transaction Service to Wallet Service through Axon query/command for current wallet status validation.
+- Transaction Service to Merchant Service through Axon query/command for merchant active validation.
+- Transaction Service to Fraud Service through Axon command/query for risk evaluation.
+- Transaction Service to Ledger Service through Axon command for journal posting.
 - Admin UI through Gateway to owning services.
 
 Avoid synchronous calls:
@@ -856,7 +863,7 @@ Avoid synchronous calls:
 
 Rule of thumb:
 
-- If the caller needs an immediate decision to continue a command, a synchronous call can be acceptable.
+- If the caller needs an immediate decision to continue a financial command, use Axon command/query semantics and fail closed on timeout or unavailable dependency.
 - If the caller is building a read model, use Kafka.
 - If the caller is coordinating a stateful workflow, use Axon command/event/saga patterns.
 
@@ -875,12 +882,12 @@ Forbidden duplication:
 - Copying KYC/KYB approval state and treating it as authoritative without event freshness rules.
 - Duplicating ledger entries outside Ledger Service as financial truth.
 
-## Open Boundary Questions
+## Boundary Decisions
 
-These can be decided during API/event contract planning:
+These decisions are fixed before implementation:
 
-1. Should KYB review live entirely in Merchant Service, or should KYC Service become a broader Verification Service?
-2. Should audit remain local per service for MVP, or should a dedicated Audit Service be introduced in Phase 0?
-3. Should fraud risk evaluation be synchronous REST for MVP or Axon command with async response?
-4. Should merchant active validation during payment be synchronous, event-cached, or both?
-5. Should a later release add explicit pre-authorization holds for long-running customer payments beyond the pending-withdrawal model?
+1. KYB review lives in Merchant Service. KYC Service owns personal identity verification only. A broader Verification Service may be introduced later only through an ADR and migration plan.
+2. Audit remains local and mandatory per owning service from the first implementation. A centralized audit stream is published through Kafka for search/reporting, but it is not the audit source of truth.
+3. Fraud risk evaluation for money-moving workflows uses Axon command/query semantics with a bounded response before ledger posting. The workflow fails closed on timeout or unavailable Fraud Service.
+4. Merchant active validation during payment is authoritative through Merchant Service at confirmation time. Event-cached merchant state may be used only for UI prefill and non-authoritative pre-checks.
+5. Long-running customer payment flows must use explicit ledger-backed authorization or clearing-account holds. Wallet-only holds are forbidden. This is not needed for fixed QR payment in the first implementation because payment confirmation posts immediately or fails.

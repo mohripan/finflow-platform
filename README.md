@@ -30,3 +30,4 @@ Start here:
 - [docs/QUESTIONS.md](docs/QUESTIONS.md)
 - [docs/decisions/0001-architecture-baseline.md](docs/decisions/0001-architecture-baseline.md)
 - [docs/decisions/0002-business-flow-baseline.md](docs/decisions/0002-business-flow-baseline.md)
+- [docs/decisions/0003-production-readiness-refinements.md](docs/decisions/0003-production-readiness-refinements.md)

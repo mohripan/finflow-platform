@@ -19,6 +19,17 @@ These contracts are intentionally implementation-facing. They should later be co
 9. Errors use one shared envelope.
 10. File bytes use object upload flows; service databases store metadata only.
 
+## Identifier Rules
+
+Route parameters in public APIs are public-safe identifiers, even when the placeholder uses a short name such as `{merchantId}` or `{transactionId}`.
+
+Rules:
+
+- Public API IDs must use the entity public ID or public reference, for example `mrc_...`, `txn_...`, `wal_...`, `kyc_...`, `jrn_...`.
+- Internal UUID primary keys stay inside the owning service database and are not accepted in public routes.
+- Internal service commands may carry internal IDs only when both services have a documented command contract and the IDs were previously exchanged through trusted workflow state.
+- OpenAPI files must name path parameters clearly, for example `merchantPublicId`, `transactionPublicReference`, or `walletPublicId`, even if prose examples keep shorter labels.
+
 ## Base URLs
 
 Local gateway:
@@ -396,6 +407,10 @@ Roles:
 - `ADMIN`
 - `COMPLIANCE`
 
+Path parameters:
+
+- `applicationId`: KYC application public ID.
+
 Request:
 
 ```json
@@ -416,6 +431,10 @@ Decision values:
 Roles:
 
 - `COMPLIANCE`
+
+Path parameters:
+
+- `applicationId`: KYC application public ID.
 
 Request:
 
@@ -465,6 +484,10 @@ Roles:
 
 - `MERCHANT`
 
+Path parameters:
+
+- `merchantId`: merchant public ID owned by the current actor.
+
 Request:
 
 ```json
@@ -480,7 +503,7 @@ Request:
 
 Rules:
 
-- Owner KYC must be approved before KYB can be approved. Submission may be accepted before approval if product chooses, but approval cannot happen.
+- Owner KYC must be approved before KYB submission is accepted. This avoids collecting business verification data for an owner who is not eligible to operate a merchant account.
 
 ### `POST /{merchantId}/kyb/documents`
 
@@ -490,11 +513,19 @@ Roles:
 
 Same upload pattern as KYC documents.
 
+Path parameters:
+
+- `merchantId`: merchant public ID owned by the current actor.
+
 ### `POST /{merchantId}/withdrawal-destinations`
 
 Roles:
 
 - `MERCHANT`
+
+Path parameters:
+
+- `merchantId`: merchant public ID owned by the current actor.
 
 Request:
 
@@ -531,6 +562,10 @@ Roles:
 - `ADMIN`
 - `COMPLIANCE`
 
+Path parameters:
+
+- `applicationId`: KYB application public ID.
+
 Request:
 
 ```json
@@ -546,6 +581,10 @@ Roles:
 
 - `ADMIN`
 - `COMPLIANCE`
+
+Path parameters:
+
+- `merchantId`: merchant public ID.
 
 Request:
 
@@ -604,6 +643,10 @@ Roles:
 
 - `MERCHANT`
 
+Path parameters:
+
+- `merchantId`: merchant public ID owned by the current actor.
+
 Returns merchant business wallet and available/pending balance.
 
 ### `POST /admin/{walletId}/freeze`
@@ -612,6 +655,10 @@ Roles:
 
 - `ADMIN`
 - `COMPLIANCE`
+
+Path parameters:
+
+- `walletId`: wallet public ID.
 
 Request:
 
@@ -740,6 +787,7 @@ Rules:
 
 - Amount is fixed by merchant.
 - Merchant must be active.
+- `merchantId` is the merchant public ID.
 
 ### `POST /merchant-payments/pay`
 
@@ -812,6 +860,7 @@ Rules:
 
 - Withdrawal enters `PENDING_PAYOUT`.
 - Completion requires simulated payout callback from Payment Service.
+- `merchantId` and `withdrawalDestinationId` are public IDs owned by the current merchant actor.
 
 ### `POST /refunds`
 
@@ -831,6 +880,12 @@ Request:
   "reason": "Customer returned item."
 }
 ```
+
+Rules:
+
+- `originalTransactionId` is the original merchant payment public transaction ID or public reference.
+- Full refund reverses the original merchant payment journal: merchant net amount is debited from merchant balance, fee revenue is debited for the original flat fee, and customer wallet is credited for the gross payment amount.
+- Merchant balance sufficiency is checked against the merchant net refund amount. Fee revenue reversal is a platform accounting reversal and is not charged again to the merchant.
 
 Response:
 
@@ -864,6 +919,10 @@ Decision values:
 - `APPROVE`
 - `REJECT`
 
+Path parameters:
+
+- `refundRequestId`: refund request public ID.
+
 ### `GET /me`
 
 Roles:
@@ -884,6 +943,10 @@ Returns current customer's transaction history.
 Roles:
 
 - `MERCHANT`
+
+Path parameters:
+
+- `merchantId`: merchant public ID owned by the current actor.
 
 Returns merchant transaction history.
 
@@ -921,6 +984,10 @@ Roles:
 
 - `ADMIN`
 - `SERVICE`
+
+Path parameters:
+
+- `paymentInstructionId`: payment instruction public ID.
 
 Simulates successful top-up payment.
 
@@ -991,6 +1058,10 @@ Roles:
 - `ADMIN`
 - `COMPLIANCE`
 
+Path parameters:
+
+- `alertId`: fraud alert public ID.
+
 Request:
 
 ```json
@@ -1054,6 +1125,10 @@ Roles:
 - `ADMIN`
 - `COMPLIANCE`
 
+Path parameters:
+
+- `journalId`: ledger journal public ID.
+
 Returns journal and entries.
 
 ### `POST /internal/journals`
@@ -1062,7 +1137,7 @@ Roles:
 
 - `SERVICE`
 
-Internal endpoint only if Axon command handler is not the direct integration point.
+Operational fallback endpoint only. Production financial workflows must post journals through the Ledger Service Axon command handler.
 
 Rules:
 
@@ -1144,6 +1219,10 @@ Roles:
 
 - `MERCHANT`
 
+Path parameters:
+
+- `merchantId`: merchant public ID owned by the current actor.
+
 Query:
 
 - `from`
@@ -1151,14 +1230,16 @@ Query:
 
 Returns merchant incoming payments, withdrawals, refunds, and fee totals.
 
-## Internal Validation APIs
+## Internal Workflow Commands
 
-These APIs may exist behind service-to-service auth or be replaced by Axon commands/events. They must not be exposed to mobile/web clients.
+Financial workflow decisions use Axon command/query contracts, not public REST endpoints. These command/query contracts must not be exposed to mobile/web clients.
 
-### Wallet Validation
+### Wallet Status Validation
 
-```http
-POST /internal/v1/wallets/validate-outgoing
+Command/query:
+
+```text
+ValidateWalletOutgoingStatus
 ```
 
 Request:
@@ -1166,22 +1247,34 @@ Request:
 ```json
 {
   "walletId": "wal_01HT...",
-  "amountMinor": 50000,
-  "currency": "IDR",
   "purpose": "MERCHANT_PAYMENT"
 }
 ```
 
-### Merchant Validation
+Rules:
 
-```http
-POST /internal/v1/merchants/{merchantId}/validate-active
+- Wallet Service validates wallet ownership/status only.
+- Ledger Service, not Wallet Service, makes the authoritative balance sufficiency decision during journal posting.
+
+### Merchant Active Validation
+
+Command/query:
+
+```text
+ValidateMerchantActiveForPayment
 ```
+
+Rules:
+
+- Merchant Service validates merchant KYB approval, active status, suspension state, and payment acceptance settings at payment confirmation time.
+- Event-cached merchant state can be used only for UI pre-checks.
 
 ### Fraud Evaluation
 
-```http
-POST /internal/v1/fraud/evaluate
+Command/query:
+
+```text
+EvaluateTransactionRisk
 ```
 
 Request:
@@ -1196,6 +1289,35 @@ Request:
   "currency": "IDR"
 }
 ```
+
+Rules:
+
+- Transaction workflow must receive `ALLOW`, `REVIEW`, or `BLOCK` before requesting ledger posting.
+- Timeout or unavailable Fraud Service fails closed and does not post ledger entries.
+
+### Ledger Journal Posting
+
+Command:
+
+```text
+PostLedgerJournal
+```
+
+Rules:
+
+- Ledger Service validates balanced entries, account status, idempotent transaction step reference, and authoritative account balance inside one serialized posting transaction.
+- Ledger Service rejects insufficient funds; Wallet Service projections are never used as the financial source of truth.
+
+## Document Review URLs
+
+KYC Service and Merchant Service generate short-lived signed document review URLs for authorized admin/compliance users.
+
+Rules:
+
+- Review URLs are generated only after service-level authorization and ownership checks.
+- Review URLs are scoped to one object key, actor, document ID, content type, and short expiration.
+- Review URLs are returned only through admin APIs and are never emitted in Kafka events.
+- A dedicated document-access service is not part of the baseline. Adding one later requires an ADR because it changes sensitive document access ownership.
 
 ## Contract Testing Requirements
 
@@ -1213,11 +1335,11 @@ Runtime:
 - Admin endpoints must verify role restrictions.
 - Document upload endpoints must verify object metadata and signed URL behavior.
 
-## Open API Questions
+## API Decisions
 
-These should be answered before generating OpenAPI files:
+These decisions are fixed before OpenAPI generation:
 
-1. Should signed document download/review URLs be generated directly by KYC/Merchant services, or by a dedicated document-access component later?
-2. Should internal validation APIs exist as REST endpoints in MVP, or should those be Axon commands only?
-3. Should admin transaction search expose customer/merchant PII filters, or avoid PII filters in MVP?
-4. Should mobile app use BFF-style aggregated endpoints later, or direct gateway routes to each service for MVP?
+1. KYC Service and Merchant Service generate signed document upload and review URLs for their own documents.
+2. Financial validation and journal posting use Axon command/query contracts. Internal REST is not the default path for money-moving decisions.
+3. Admin transaction search avoids raw PII filters in the baseline. Search by public reference, status, type, date range, merchant public ID, customer public ID, or masked identifiers only.
+4. Mobile and admin clients call gateway routes to owning services for the baseline. A BFF may be added later only when repeated cross-service client aggregation causes measurable complexity.
