@@ -204,3 +204,5 @@ Remaining questions:
 
 1. Should mobile state management stay TanStack Query plus Zustand, or do you prefer Redux Toolkit?
 2. Should observability use Grafana Tempo or Jaeger for local tracing?
+
+Business-flow questions are tracked in [BUSINESS_RULES.md](BUSINESS_RULES.md).

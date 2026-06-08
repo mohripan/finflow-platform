@@ -125,6 +125,7 @@ Deliverables:
 - Wallet creation after approved KYC/onboarding.
 - Double-entry ledger model.
 - Wallet balance projection.
+- Pending balance projection.
 - Idempotency table for money-moving commands.
 
 Core flows:
@@ -153,12 +154,19 @@ Deliverables:
 - Axon command and event flow for top-up.
 - Axon command and event flow for peer transfer.
 - Axon command and event flow for merchant QR payment.
+- Axon command and event flow for merchant withdrawal.
+- Axon command and event flow for refund.
+- Configurable flat merchant payment fee accounting.
+- Admin refund approval flow.
+- Admin fraud-review retry flow.
 - Kafka Avro integration events for transaction, ledger, payment, reporting, and notification consumers.
 - Schema Registry validation for published event contracts.
 - React Native wallet dashboard.
 - React Native top-up screen.
 - React Native transfer screen.
 - React Native merchant payment screens.
+- React Native merchant withdrawal screen.
+- React Native refund request screen for merchants.
 - Transaction history projection.
 
 Core flows:
@@ -167,6 +175,10 @@ Core flows:
 - Customer transfers to another customer.
 - Merchant generates a QR payment request.
 - Customer pays merchant by QR.
+- Merchant withdraws business balance through the generic payout simulation.
+- Merchant requests full refund for a completed merchant payment.
+- Admin approves refund before ledger reversal is posted.
+- Admin resolves a fraud review and retries the blocked transaction.
 - Transaction status updates from pending to completed or failed.
 - Ledger entries are created for successful movements.
 
@@ -174,6 +186,9 @@ Exit criteria:
 
 - End-to-end demo works from mobile app to backend.
 - Merchant QR payment demo works from mobile app to backend.
+- Merchant withdrawal demo works from mobile app to backend.
+- Refund demo works from mobile app to backend.
+- Ledger entries include merchant payment fee accounting.
 - Transaction history shows successful and failed records.
 - Test suite covers duplicate request and insufficient funds cases.
 - Contract tests prevent services from publishing incompatible Kafka events.

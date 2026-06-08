@@ -173,6 +173,7 @@ Responsibilities:
 - Merchant profile.
 - Merchant onboarding status.
 - Merchant payment acceptance configuration.
+- Merchant withdrawal destination configuration.
 - Merchant settlement-style reporting inputs.
 - Link merchant owner IDs to Keycloak subject IDs.
 
@@ -183,7 +184,7 @@ Primary database: PostgreSQL.
 Responsibilities:
 
 - Wallet creation.
-- Current wallet balance projection.
+- Current available and pending wallet balance projections.
 - Wallet status: active, frozen, closed.
 - Available balance checks.
 - Balance reservation if later needed.
@@ -234,6 +235,11 @@ Responsibilities:
 - Top-up workflow.
 - QR payment workflow.
 - Merchant payment workflow.
+- Merchant withdrawal workflow.
+- Refund workflow.
+- Configurable flat merchant payment fee workflow.
+- Admin-approved refund workflow.
+- Admin fraud-review retry workflow.
 - Transaction status lifecycle.
 - Idempotency keys for write requests.
 - Coordination with Wallet, Ledger, Payment, Fraud, and Notification contexts.
@@ -257,6 +263,8 @@ Responsibilities:
 
 - Simulated payment gateway.
 - Payment authorization and callback simulation.
+- Payout/withdrawal simulation.
+- Simulated payout callback handling.
 - Payment status mapping.
 - Payment failure scenarios.
 
@@ -337,6 +345,15 @@ Candidate events:
 - `MerchantApproved`
 - `MerchantPaymentRequested`
 - `MerchantPaymentCompleted`
+- `MerchantWithdrawalRequested`
+- `MerchantWithdrawalPending`
+- `MerchantWithdrawalCompleted`
+- `RefundRequested`
+- `RefundApproved`
+- `RefundRejected`
+- `RefundCompleted`
+- `MerchantFeeCharged`
+- `FraudReviewRetryRequested`
 - `WalletCreated`
 - `WalletFrozen`
 - `TopUpRequested`

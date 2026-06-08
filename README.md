@@ -6,6 +6,9 @@ Start here:
 
 - [ARCHITECTURE.md](ARCHITECTURE.md)
 - [ROADMAP.md](ROADMAP.md)
+- [docs/BUSINESS_FLOWS.md](docs/BUSINESS_FLOWS.md)
+- [docs/BUSINESS_RULES.md](docs/BUSINESS_RULES.md)
 - [docs/PROJECT_BRIEF.md](docs/PROJECT_BRIEF.md)
 - [docs/QUESTIONS.md](docs/QUESTIONS.md)
 - [docs/decisions/0001-architecture-baseline.md](docs/decisions/0001-architecture-baseline.md)
+- [docs/decisions/0002-business-flow-baseline.md](docs/decisions/0002-business-flow-baseline.md)
