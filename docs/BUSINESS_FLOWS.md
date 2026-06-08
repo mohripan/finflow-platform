@@ -154,8 +154,8 @@ Rules:
    - Storefront or business proof document.
    - Bank account or wallet destination for withdrawals.
    - Owner identity linkage.
-5. Merchant Service creates a merchant profile in `KYB_SUBMITTED`.
-6. KYC Service or Merchant Service records KYB review data.
+5. Merchant Service creates or updates the merchant profile to `KYB_SUBMITTED`.
+6. Merchant Service records KYB review data and document metadata. KYC Service remains responsible only for the owner personal KYC status.
 7. Admin reviews KYB documents and business details.
 8. Admin approves, rejects, or requests resubmission.
 9. On approval:
@@ -205,8 +205,8 @@ Failure cases:
    - Sender has sufficient available balance.
    - Amount is within limits.
    - Fraud rules do not require blocking.
-6. Wallet Service reserves or debits sender funds.
-7. Ledger Service posts balanced journal:
+6. Transaction Service requests an authoritative ledger post after wallet, limit, idempotency, and fraud checks pass.
+7. Ledger Service posts the balanced journal exactly once for the transaction step:
    - Debit sender wallet account.
    - Credit recipient wallet account.
 8. Transaction Service marks transfer as completed.
@@ -267,14 +267,15 @@ Failure cases:
    - Withdrawal destination is verified.
    - Amount is within withdrawal limits.
 4. Transaction Service marks withdrawal as pending.
-5. Ledger Service posts balanced journal:
+5. Ledger Service posts a balanced pending-withdrawal journal:
    - Debit merchant business balance account.
    - Credit external payout clearing account.
 6. Payment Service emits a simulated payout callback.
-7. Transaction Service marks withdrawal as completed or failed based on callback.
-8. Merchant sees withdrawal in history.
+7. If payout succeeds, Transaction Service marks withdrawal as completed and Wallet Service clears pending balance from ledger/payment events.
+8. If payout fails, Ledger Service posts a reversal journal that debits payout clearing and credits merchant business balance, then Transaction Service marks withdrawal as failed.
+9. Merchant sees withdrawal in history.
 
-MVP uses pending withdrawal followed by simulated payout callback.
+MVP uses pending withdrawal followed by simulated payout callback. The pending state is backed by ledger movement into a clearing account, not by a balance-only hold.
 
 ## Refund Flow
 

@@ -134,12 +134,12 @@ Impact:
 
 ### 14. Mobile state management?
 
-Default: TanStack Query for server state and Zustand for small client state.
+Decision: Redux Toolkit for mobile app and workflow state, with TanStack Query still allowed for server-state fetching/caching where it fits.
 
 Impact:
 
-- Keeps global state small and maintainable.
-- Redux Toolkit is acceptable but heavier for this project.
+- Redux Toolkit gives explicit, centralized state handling for authentication-adjacent app state, multi-step financial workflows, KYC/KYB forms, QR/payment confirmation state, and offline/error recovery.
+- TanStack Query remains useful for API cache, loading, refetching, and mutation state, but it should not replace explicit workflow state where correctness and traceability matter.
 
 ## Operations Decisions
 
@@ -163,7 +163,7 @@ Impact:
 
 ### 17. Observability stack?
 
-Default: Actuator, Micrometer, OpenTelemetry, Prometheus, Grafana, and a tracing backend.
+Decision: Actuator, Micrometer, OpenTelemetry, Prometheus, Grafana, Loki or another log store, and Jaeger for local distributed tracing.
 
 Impact:
 
@@ -190,6 +190,14 @@ Answered:
 14. Spring Cloud Config: Phase 0.
 15. Service discovery: Eureka.
 16. Avro compatibility mode: backward.
+17. KYB ownership: Merchant Service owns merchant KYB applications, KYB documents, review state, and withdrawal destinations. KYC Service owns personal KYC only.
+18. Document uploads: KYC/KYB documents use short-lived signed object upload URLs with metadata/checksum verification. Backend services store metadata and object references, not document bytes.
+19. Money-movement consistency: instant transfer and merchant payment do not use wallet-only reservations. They rely on transaction idempotency, authoritative ledger posting, duplicate journal protection, database constraints, and locked or serialized balance validation.
+20. Pending withdrawals: pending balance is backed by ledger movement into payout clearing. Failed payout requires a reversal journal before pending balance is released.
+21. Workflow communication: Axon commands/events and sagas coordinate financial workflows. Kafka Avro events are committed integration facts for projections, notifications, audit streams, and reporting, not financial command messages.
+22. Fraud review retry: admin fraud-review retry belongs with the Fraud, Limits, And Account Controls phase, not the first money-movement phase.
+23. Mobile state management: Redux Toolkit is the selected mobile app/workflow state layer. TanStack Query may still be used for server-state fetching and caching.
+24. Local tracing: Jaeger is the selected local distributed tracing backend.
 
 Contract decision:
 
@@ -202,7 +210,6 @@ Contract decision:
 
 Remaining questions:
 
-1. Should mobile state management stay TanStack Query plus Zustand, or do you prefer Redux Toolkit?
-2. Should observability use Grafana Tempo or Jaeger for local tracing?
+- None currently. New implementation questions should be recorded here before code changes when they affect architecture, business rules, API contracts, events, or operational behavior.
 
 Business-flow questions are tracked in [BUSINESS_RULES.md](BUSINESS_RULES.md).

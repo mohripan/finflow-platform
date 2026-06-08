@@ -63,7 +63,7 @@ Recommended libraries:
 - Expo.
 - React Navigation.
 - TanStack Query.
-- Zustand for simple local state.
+- Redux Toolkit for app and workflow state.
 - React Hook Form and Zod.
 - Secure token storage using platform keychain/keystore.
 
@@ -187,13 +187,15 @@ Responsibilities:
 - Current available and pending wallet balance projections.
 - Wallet status: active, frozen, closed.
 - Available balance checks.
-- Balance reservation if later needed.
+- Projection updates from posted ledger journals and payout/refund workflow events.
 
 Primary database: PostgreSQL.
 
 Important rule:
 
 - Wallet balance is not the source of truth. The immutable ledger is the financial source of truth.
+- Instant money movements are protected through Transaction Service idempotency, Ledger Service duplicate-journal protection, database constraints, and serialized/locked validation of authoritative balances. Wallet Service must not create independent balance-only reservations for completed transfer or merchant payment flows.
+- Pending money movements, such as merchant withdrawal, are represented by posted ledger movement into clearing accounts and exposed through pending balance projections.
 
 ### Ledger Service
 
@@ -204,6 +206,8 @@ Responsibilities:
 - Debit and credit entries.
 - Reconciliation support.
 - Accounting reports.
+- Duplicate journal protection by transaction step reference.
+- Reversal journals for failed payout, refund, and correction workflows.
 
 Primary database: PostgreSQL.
 
@@ -447,6 +451,13 @@ External APIs are RESTful JSON APIs behind Spring Cloud Gateway.
 
 Internal coordination should prefer Axon commands/events for command workflows, Kafka for broad integration events, and direct REST only for simple synchronous queries that are genuinely required.
 
+Workflow communication rules:
+
+- Axon commands carry intent inside stateful workflows, such as post journal, create payment instruction, activate wallet, or retry a reviewed transaction.
+- Axon events represent accepted workflow/domain facts and drive sagas or process managers.
+- Kafka events are Avro integration facts published after commit for reporting, notifications, audit streams, analytics, and cross-service projections.
+- Kafka events must not be used as request commands for financial correctness. A service that needs another service to make an immediate decision should use an Axon command or an authenticated internal REST validation endpoint.
+
 API contracts should be documented with OpenAPI per service.
 
 Kafka contracts should be documented as Avro schema files in a shared contracts area. Services must depend on those schemas instead of hand-building untyped JSON messages.
@@ -480,7 +491,7 @@ Local development should make room for:
 - Grafana.
 - Prometheus.
 - Loki or another log store.
-- Jaeger or Tempo for traces.
+- Jaeger for local distributed tracing.
 
 ## Local Development Topology
 

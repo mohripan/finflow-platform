@@ -257,6 +257,8 @@ Rules:
 - Ledger journal debits merchant business balance and credits payout clearing.
 - Withdrawal enters pending state first.
 - Payment Service completes withdrawal through a simulated payout callback.
+- Successful payout clears pending balance.
+- Failed payout must post a reversal journal that debits payout clearing and credits merchant business balance before pending balance is released.
 
 ## Refund Rules
 

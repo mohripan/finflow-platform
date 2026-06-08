@@ -158,7 +158,6 @@ Deliverables:
 - Axon command and event flow for refund.
 - Configurable flat merchant payment fee accounting.
 - Admin refund approval flow.
-- Admin fraud-review retry flow.
 - Kafka Avro integration events for transaction, ledger, payment, reporting, and notification consumers.
 - Schema Registry validation for published event contracts.
 - React Native wallet dashboard.
@@ -178,7 +177,6 @@ Core flows:
 - Merchant withdraws business balance through the generic payout simulation.
 - Merchant requests full refund for a completed merchant payment.
 - Admin approves refund before ledger reversal is posted.
-- Admin resolves a fraud review and retries the blocked transaction.
 - Transaction status updates from pending to completed or failed.
 - Ledger entries are created for successful movements.
 
@@ -205,18 +203,21 @@ Deliverables:
 - Suspicious activity alerts.
 - Account freeze/unfreeze workflow.
 - Admin fraud review screen.
+- Admin fraud-review retry flow.
 - Kafka fraud signal consumers.
 
 Core flows:
 
 - Large or repeated transfer is flagged.
 - Admin reviews alert.
+- Admin resolves a fraud review and retries the blocked transaction.
 - Admin freezes or unfreezes wallet.
 - Frozen wallets cannot send money.
 
 Exit criteria:
 
 - Fraud alerts appear in admin dashboard.
+- Admin can resolve a fraud review and request retry without bypassing current validations or ledger idempotency.
 - Frozen-wallet restrictions are enforced at backend level.
 - Audit log records admin account-control actions.
 
