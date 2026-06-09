@@ -63,7 +63,7 @@ public class KycApplication {
   protected KycApplication() {
   }
 
-  public static KycApplication submit(
+  public static KycApplication draft(
       String subject,
       String legalName,
       LocalDate dateOfBirth,
@@ -80,7 +80,7 @@ public class KycApplication {
     application.nationalIdentityHash = sha256(nationalIdentityNumber.trim());
     application.phoneNumber = phoneNumber.trim();
     application.address = address.trim();
-    application.status = KycStatus.PENDING_REVIEW;
+    application.status = KycStatus.DRAFT;
     application.rejectionCount = 0;
     application.createdAt = now;
     application.updatedAt = now;
@@ -101,6 +101,17 @@ public class KycApplication {
     this.nationalIdentityHash = sha256(nationalIdentityNumber.trim());
     this.phoneNumber = phoneNumber.trim();
     this.address = address.trim();
+    this.status = KycStatus.DRAFT;
+    this.updatedAt = Instant.now();
+  }
+
+  public void submitForReview(boolean hasIdentityDocument, boolean hasSelfie) {
+    if (status != KycStatus.DRAFT && status != KycStatus.RESUBMISSION_REQUIRED && status != KycStatus.REJECTED) {
+      throw new BusinessRuleException("KYC_NOT_EDITABLE", "Only draft or resubmission KYC applications can be submitted.");
+    }
+    if (!hasIdentityDocument || !hasSelfie) {
+      throw new BusinessRuleException("KYC_EVIDENCE_REQUIRED", "Identity document and selfie evidence are required before KYC submission.");
+    }
     this.status = KycStatus.PENDING_REVIEW;
     this.updatedAt = Instant.now();
   }

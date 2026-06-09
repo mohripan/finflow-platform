@@ -5,6 +5,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   MenuItem,
   Paper,
   Stack,
@@ -17,8 +18,8 @@ import {
   Typography
 } from "@mui/material";
 import { useEffect, useState } from "react";
-import { listPendingKycApplications, submitKycDecision } from "../api/kycReviewApi";
-import type { KycApplication, KycDecision } from "../types";
+import { createKycEvidenceReviewUrl, listKycEvidence, listPendingKycApplications, submitKycDecision } from "../api/kycReviewApi";
+import type { KycApplication, KycDecision, KycDocument } from "../types";
 
 type KycReviewScreenProps = {
   accessToken: string;
@@ -31,12 +32,22 @@ export function KycReviewScreen({ accessToken, profileEmail }: KycReviewScreenPr
   const [decision, setDecision] = useState<KycDecision>("APPROVE");
   const [reason, setReason] = useState("Identity details verified.");
   const [queueLoading, setQueueLoading] = useState(false);
+  const [evidence, setEvidence] = useState<KycDocument[]>([]);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     loadQueue();
   }, [accessToken]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setEvidence([]);
+      return;
+    }
+    loadEvidence(selectedId);
+  }, [accessToken, selectedId]);
 
   async function loadQueue() {
     if (!accessToken) return;
@@ -70,6 +81,30 @@ export function KycReviewScreen({ accessToken, profileEmail }: KycReviewScreenPr
     }
   }
 
+  async function loadEvidence(applicationId: string) {
+    setEvidenceLoading(true);
+    setError("");
+    try {
+      const data = await listKycEvidence(accessToken, applicationId);
+      setEvidence(data.documents);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load KYC evidence.");
+    } finally {
+      setEvidenceLoading(false);
+    }
+  }
+
+  async function openEvidence(documentId: string) {
+    if (!selectedId) return;
+    setError("");
+    try {
+      const data = await createKycEvidenceReviewUrl(accessToken, selectedId, documentId);
+      window.open(data.reviewUrl, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create KYC evidence review URL.");
+    }
+  }
+
   return (
     <Stack gap={3}>
       <Stack direction={{ xs: "column", sm: "row" }} gap={2} alignItems={{ sm: "center" }} justifyContent="space-between">
@@ -87,6 +122,7 @@ export function KycReviewScreen({ accessToken, profileEmail }: KycReviewScreenPr
         selectedId={selectedId}
         onSelect={setSelectedId}
       />
+      <EvidenceTable evidence={evidence} loading={evidenceLoading} onOpen={openEvidence} />
       <Stack direction={{ xs: "column", md: "row" }} gap={2} alignItems={{ md: "center" }}>
         <TextField select label="Decision" value={decision} onChange={(event) => setDecision(event.target.value as KycDecision)} sx={{ minWidth: 220 }}>
           <MenuItem value="APPROVE">Approve</MenuItem>
@@ -108,6 +144,50 @@ export function KycReviewScreen({ accessToken, profileEmail }: KycReviewScreenPr
   );
 }
 
+function EvidenceTable({ evidence, loading, onOpen }: { evidence: KycDocument[]; loading: boolean; onOpen: (documentId: string) => void }) {
+  return (
+    <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden", borderColor: "#d7e7ff" }}>
+      <Box sx={{ p: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <Typography fontWeight={800}>Evidence</Typography>
+        <Chip size="small" label={loading ? "Loading" : `${evidence.length} files`} />
+      </Box>
+      <Table aria-label="KYC evidence">
+        <TableHead>
+          <TableRow>
+            <TableCell>Document</TableCell>
+            <TableCell>Status</TableCell>
+            <TableCell>Size</TableCell>
+            <TableCell>Checksum</TableCell>
+            <TableCell align="right">Review</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {evidence.map((document) => (
+            <TableRow key={document.documentId}>
+              <TableCell>{document.documentType === "IDENTITY_DOCUMENT" ? "KTP or SIM" : "Selfie"}</TableCell>
+              <TableCell>{document.status}</TableCell>
+              <TableCell>{Math.ceil(document.sizeBytes / 1024)} KB</TableCell>
+              <TableCell>
+                <Typography variant="body2" sx={{ fontFamily: "monospace" }}>{document.checksum.slice(0, 12)}...</Typography>
+              </TableCell>
+              <TableCell align="right">
+                <Button variant="outlined" onClick={() => onOpen(document.documentId)}>Open evidence</Button>
+              </TableCell>
+            </TableRow>
+          ))}
+          {!loading && evidence.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={5}>
+                <Typography color="text.secondary">Select a pending KYC application to load evidence.</Typography>
+              </TableCell>
+            </TableRow>
+          ) : null}
+        </TableBody>
+      </Table>
+    </Paper>
+  );
+}
+
 function KycApplicationsTable(props: {
   applications: KycApplication[];
   queueLoading: boolean;
@@ -115,7 +195,7 @@ function KycApplicationsTable(props: {
   onSelect: (applicationId: string) => void;
 }) {
   return (
-    <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
+    <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden", borderColor: "#d7e7ff" }}>
       <Table aria-label="KYC review queue">
         <TableHead>
           <TableRow>

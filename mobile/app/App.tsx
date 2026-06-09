@@ -1,10 +1,10 @@
 import * as AuthSession from "expo-auth-session";
 import React, { useMemo, useState } from "react";
-import { loadCustomerOnboarding, submitKyc as submitKycRequest } from "./src/api";
+import { createKycDraft, loadCustomerOnboarding, submitKycForReview, uploadKycEvidence } from "./src/api";
 import { clientId, issuer, testAccessToken } from "./src/config";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
-import type { ApiProfile, KycState } from "./src/types";
+import type { ApiProfile, CapturedEvidence, KycState } from "./src/types";
 import { emptyKycForm } from "./src/types";
 
 export default function App() {
@@ -76,12 +76,23 @@ export default function App() {
     setKyc(next.kyc);
   }
 
-  async function submitKyc() {
+  async function submitKyc(evidence: Record<"IDENTITY_DOCUMENT" | "SELFIE", CapturedEvidence | null>) {
     if (!token) return;
+    if (!evidence.IDENTITY_DOCUMENT || !evidence.SELFIE) {
+      setMessage("Capture your identity card and selfie before submitting.");
+      return;
+    }
     setLoading(true);
     setMessage("");
     try {
-      setKyc(await submitKycRequest(token, form));
+      const draft = await createKycDraft(token, form);
+      const applicationId = draft.applicationId;
+      if (!applicationId) {
+        throw new Error("KYC draft did not include an application ID.");
+      }
+      await uploadKycEvidence(token, applicationId, evidence.IDENTITY_DOCUMENT);
+      await uploadKycEvidence(token, applicationId, evidence.SELFIE);
+      setKyc(await submitKycForReview(token, applicationId));
       await refresh(token);
       setMessage("KYC submitted for review.");
     } catch (error) {

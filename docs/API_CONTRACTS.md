@@ -345,7 +345,7 @@ Roles:
 
 Returns current user's KYC application status.
 
-### `POST /me/submissions`
+### `POST /me/applications`
 
 Roles:
 
@@ -366,14 +366,37 @@ Request:
 
 Response status:
 
-- `202 ACCEPTED`
+- `201 CREATED`
+
+Response data:
+
+```json
+{
+  "applicationId": "kyc_01HY...",
+  "status": "DRAFT",
+  "legalName": "Ayu Lestari",
+  "dateOfBirth": "1996-05-20",
+  "phoneNumber": "+6281234567890",
+  "address": "Jakarta Selatan",
+  "rejectionCount": 0,
+  "reviewedBy": null,
+  "reviewReason": null,
+  "reviewedAt": null,
+  "createdAt": "2026-06-09T00:00:00Z",
+  "updatedAt": "2026-06-09T00:00:00Z"
+}
+```
 
 Rules:
 
 - Reject with `REJECTION_LIMIT_REACHED` if KYC is locked.
 - Sensitive identity values are accepted only over TLS, are immediately hashed and encrypted by KYC Service, are never logged, and are never returned by APIs or emitted in Kafka events.
 
-### `POST /me/documents`
+### `POST /me/submissions`
+
+Compatibility route for creating or updating KYC metadata. New clients should use `POST /me/applications`, then upload evidence, then call `POST /me/applications/{applicationId}/submissions`.
+
+### `POST /me/applications/{applicationId}/documents/upload-sessions`
 
 Roles:
 
@@ -386,10 +409,10 @@ Request:
 
 ```json
 {
-  "documentType": "IDENTITY_CARD",
+  "documentType": "IDENTITY_DOCUMENT",
   "contentType": "image/jpeg",
   "sizeBytes": 541223,
-  "checksum": "sha256:..."
+  "checksum": "64-character-lowercase-sha256"
 }
 ```
 
@@ -399,12 +422,8 @@ Response:
 {
   "data": {
     "documentId": "doc_01HT...",
+    "documentType": "IDENTITY_DOCUMENT",
     "uploadUrl": "http://localhost:9000/...",
-    "uploadMethod": "PUT",
-    "requiredHeaders": {
-      "Content-Type": "image/jpeg",
-      "x-amz-checksum-sha256": "..."
-    },
     "expiresAt": "2026-06-08T10:25:30Z"
   }
 }
@@ -417,6 +436,58 @@ Rules:
 - Signed upload URLs must be short-lived, scoped to one object key, content type, size limit, checksum, actor, and document type.
 - After upload, the owning service verifies object metadata/checksum before the document can be reviewed.
 - Signed object URLs must never be included in Kafka events.
+
+### `POST /me/applications/{applicationId}/documents/{documentId}/confirm-upload`
+
+Roles:
+
+- `CUSTOMER`
+- `MERCHANT`
+
+Request:
+
+```json
+{
+  "checksum": "64-character-lowercase-sha256"
+}
+```
+
+Response data:
+
+```json
+{
+  "documentId": "doc_01HT...",
+  "documentType": "IDENTITY_DOCUMENT",
+  "status": "UPLOADED",
+  "contentType": "image/jpeg",
+  "sizeBytes": 541223,
+  "checksum": "64-character-lowercase-sha256",
+  "createdAt": "2026-06-09T00:00:00Z",
+  "updatedAt": "2026-06-09T00:00:00Z"
+}
+```
+
+Rules:
+
+- KYC Service verifies the object exists in object storage and matches the expected size before marking evidence `UPLOADED`.
+- Confirmation fails if the checksum differs from the upload session.
+
+### `POST /me/applications/{applicationId}/submissions`
+
+Roles:
+
+- `CUSTOMER`
+- `MERCHANT`
+
+Response status:
+
+- `202 ACCEPTED`
+
+Rules:
+
+- Requires uploaded `IDENTITY_DOCUMENT` evidence.
+- Requires uploaded `SELFIE` evidence.
+- Changes the application status from `DRAFT` to `PENDING_REVIEW`.
 
 ### `GET /admin/applications`
 
@@ -498,6 +569,56 @@ Behavior:
 - KYC Service synchronizes customer lifecycle state to User Service through `POST /api/v1/users/internal/customer-status`.
 - `APPROVE` maps to `KYC_APPROVED`, `REJECT` maps to `KYC_REJECTED`, `REQUEST_RESUBMISSION` maps to `KYC_RESUBMISSION_REQUIRED`, and a third rejection maps to `KYC_LOCKED`.
 - Wallet activation is not performed by this endpoint. The Wallet Service owns wallet creation in the wallet/ledger phase.
+
+### `GET /admin/applications/{applicationId}/evidence`
+
+Roles:
+
+- `ADMIN`
+- `COMPLIANCE`
+- `SUPPORT`
+
+Response data:
+
+```json
+{
+  "documents": [
+    {
+      "documentId": "doc_01HT...",
+      "documentType": "IDENTITY_DOCUMENT",
+      "status": "UPLOADED",
+      "contentType": "image/jpeg",
+      "sizeBytes": 541223,
+      "checksum": "64-character-lowercase-sha256",
+      "createdAt": "2026-06-09T00:00:00Z",
+      "updatedAt": "2026-06-09T00:00:00Z"
+    }
+  ]
+}
+```
+
+### `POST /admin/applications/{applicationId}/evidence/{documentId}/review-url`
+
+Roles:
+
+- `ADMIN`
+- `COMPLIANCE`
+- `SUPPORT`
+
+Response data:
+
+```json
+{
+  "documentId": "doc_01HT...",
+  "reviewUrl": "http://localhost:9000/...",
+  "expiresAt": "2026-06-09T00:15:00Z"
+}
+```
+
+Rules:
+
+- Review URLs are short-lived and returned only to authorized admin/compliance/support users.
+- Review URLs are never emitted in Kafka events.
 
 ### `POST /admin/applications/{applicationId}/unlock`
 

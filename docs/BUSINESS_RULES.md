@@ -90,14 +90,16 @@ Required customer data:
 
 Rules:
 
-- KYC status starts as `NOT_SUBMITTED`.
-- Customer can submit KYC once required fields are complete.
-- Submitting KYC changes status to `PENDING_REVIEW`.
+- KYC status starts as `NOT_SUBMITTED` when no KYC application exists.
+- Saving required identity fields creates or updates a `DRAFT` KYC application.
+- Customer can submit KYC for review only after required fields, identity document evidence, and selfie evidence are complete.
+- Submitting KYC for review changes status to `PENDING_REVIEW`.
 - Admin approval changes status to `APPROVED`.
 - Admin rejection changes status to `REJECTED`.
 - Admin can request resubmission with a reason.
 - Customer cannot transact unless KYC status is `APPROVED`.
 - KYC documents are stored in MinIO locally, not in PostgreSQL blobs.
+- KYC document upload confirmation verifies the object exists in object storage before evidence is marked uploaded.
 - KYC decision history is append-only.
 
 ## KYB Rules

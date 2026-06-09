@@ -1,6 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { gateway } from "./config";
-import type { ApiProfile, KycForm, KycState } from "./types";
+import type { ApiProfile, CapturedEvidence, KycDocumentUploadSession, KycForm, KycState } from "./types";
 
 async function request<T>(path: string, accessToken: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${gateway}${path}`, {
@@ -27,9 +27,47 @@ export async function loadCustomerOnboarding(accessToken: string) {
   return { profile, kyc };
 }
 
-export function submitKyc(accessToken: string, form: KycForm) {
-  return request<KycState>("/api/v1/kyc/me/submissions", accessToken, {
+export function createKycDraft(accessToken: string, form: KycForm) {
+  return request<KycState>("/api/v1/kyc/me/applications", accessToken, {
     method: "POST",
     body: JSON.stringify(form)
+  });
+}
+
+export async function uploadKycEvidence(accessToken: string, applicationId: string, evidence: CapturedEvidence) {
+  const session = await request<KycDocumentUploadSession>(
+    `/api/v1/kyc/me/applications/${applicationId}/documents/upload-sessions`,
+    accessToken,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        documentType: evidence.documentType,
+        contentType: evidence.contentType,
+        sizeBytes: evidence.sizeBytes,
+        checksum: evidence.checksum
+      })
+    }
+  );
+  const objectResponse = await fetch(session.uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": evidence.contentType },
+    body: await fetch(evidence.uri).then((response) => response.blob())
+  });
+  if (!objectResponse.ok) {
+    throw new Error(`Document upload failed with HTTP ${objectResponse.status}`);
+  }
+  return request(
+    `/api/v1/kyc/me/applications/${applicationId}/documents/${session.documentId}/confirm-upload`,
+    accessToken,
+    {
+      method: "POST",
+      body: JSON.stringify({ checksum: evidence.checksum })
+    }
+  );
+}
+
+export function submitKycForReview(accessToken: string, applicationId: string) {
+  return request<KycState>(`/api/v1/kyc/me/applications/${applicationId}/submissions`, accessToken, {
+    method: "POST"
   });
 }

@@ -13,3 +13,14 @@ export type KycApplication = {
 };
 
 export type KycDecision = "APPROVE" | "REJECT" | "REQUEST_RESUBMISSION";
+
+export type KycDocument = {
+  documentId: string;
+  documentType: "IDENTITY_DOCUMENT" | "SELFIE";
+  status: string;
+  contentType: string;
+  sizeBytes: number;
+  checksum: string;
+  createdAt: string;
+  updatedAt: string;
+};

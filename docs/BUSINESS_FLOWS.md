@@ -153,21 +153,23 @@ NOT_SUBMITTED
 1. Customer opens the app.
 2. Customer registers or signs in through Keycloak.
 3. User Service creates an application profile linked to the Keycloak subject.
-4. Customer submits KYC:
+4. Customer creates a KYC draft with:
    - Legal name.
    - Date of birth.
    - National identity number.
    - Phone number.
    - Address.
+5. Customer uploads required KYC evidence:
    - Identity document image.
    - Selfie or liveness demo image for MVP.
-5. KYC Service stores structured data in PostgreSQL.
-6. Document metadata is stored in PostgreSQL.
-7. Document files are stored in MinIO locally.
-8. Admin reviews KYC in the dashboard.
-9. Admin approves, rejects, or requests resubmission.
-10. On approval, Wallet Service creates the customer wallet and ledger account.
-11. Customer can now transact.
+6. KYC Service verifies the uploaded objects exist in object storage.
+7. Customer submits the application for admin review.
+8. KYC Service stores structured data and document metadata in PostgreSQL.
+9. Document files are stored in MinIO locally.
+10. Admin reviews KYC evidence in the dashboard.
+11. Admin approves, rejects, or requests resubmission.
+12. On approval, the customer lifecycle becomes `KYC_APPROVED`.
+13. A later Wallet Service slice creates the customer wallet and ledger account before transactions are allowed.
 
 ## Merchant Onboarding Flow
 

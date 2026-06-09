@@ -51,6 +51,30 @@ describe("App", () => {
       }), { status: 200, headers: { "Content-Type": "application/json" } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         data: {
+          documents: [{
+            documentId: "doc_identity",
+            documentType: "IDENTITY_DOCUMENT",
+            status: "UPLOADED",
+            contentType: "image/jpeg",
+            sizeBytes: 2048,
+            checksum: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            createdAt: "2026-06-09T00:00:00Z",
+            updatedAt: "2026-06-09T00:00:00Z"
+          }, {
+            documentId: "doc_selfie",
+            documentType: "SELFIE",
+            status: "UPLOADED",
+            contentType: "image/jpeg",
+            sizeBytes: 1024,
+            checksum: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            createdAt: "2026-06-09T00:00:00Z",
+            updatedAt: "2026-06-09T00:00:00Z"
+          }]
+        },
+        meta: { correlationId: "test-correlation-id" }
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: {
           applicationId: "kyc_123",
           status: "APPROVED",
           legalName: "Ayu Lestari",
@@ -66,6 +90,7 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("Ayu Lestari")).toBeInTheDocument();
+    expect(await screen.findByText("KTP or SIM")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /submit decision/i }));
 
     await waitFor(() => expect(fetch).toHaveBeenLastCalledWith(

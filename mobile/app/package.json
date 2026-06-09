@@ -10,11 +10,13 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@expo/vector-icons": "^14.1.0",
     "@expo/metro-runtime": "~5.0.5",
+    "@expo/vector-icons": "^14.1.0",
     "expo": "~53.0.12",
     "expo-auth-session": "~6.2.1",
+    "expo-camera": "~16.1.11",
     "expo-crypto": "~14.1.5",
+    "expo-file-system": "~18.1.11",
     "expo-linking": "~7.1.5",
     "expo-secure-store": "~14.2.3",
     "expo-status-bar": "~2.2.3",

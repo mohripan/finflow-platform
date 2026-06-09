@@ -1,4 +1,4 @@
-import type { KycApplication, KycDecision } from "../types";
+import type { KycApplication, KycDecision, KycDocument } from "../types";
 
 const gatewayUrl = import.meta.env.VITE_GATEWAY_URL ?? "http://localhost:8080";
 
@@ -31,4 +31,16 @@ export function submitKycDecision(accessToken: string, applicationId: string, de
     method: "POST",
     body: JSON.stringify({ decision, reason })
   });
+}
+
+export function listKycEvidence(accessToken: string, applicationId: string) {
+  return request<{ documents: KycDocument[] }>(accessToken, `/api/v1/kyc/admin/applications/${applicationId}/evidence`);
+}
+
+export function createKycEvidenceReviewUrl(accessToken: string, applicationId: string, documentId: string) {
+  return request<{ documentId: string; reviewUrl: string; expiresAt: string }>(
+    accessToken,
+    `/api/v1/kyc/admin/applications/${applicationId}/evidence/${documentId}/review-url`,
+    { method: "POST" }
+  );
 }
