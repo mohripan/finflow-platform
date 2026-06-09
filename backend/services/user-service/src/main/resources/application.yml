@@ -1,0 +1,25 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: user-service
+  datasource:
+    url: ${USER_SERVICE_DATASOURCE_URL:jdbc:h2:mem:user_service;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE}
+    username: ${USER_SERVICE_DATASOURCE_USERNAME:sa}
+    password: ${USER_SERVICE_DATASOURCE_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/finflow-local}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

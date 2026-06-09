@@ -1,0 +1,24 @@
+{
+  "name": "finflow-platform",
+  "private": true,
+  "workspaces": [
+    "mobile/app",
+    "admin/dashboard"
+  ],
+  "scripts": {
+    "test": "npm run test --workspace mobile/app && npm run test --workspace admin/dashboard",
+    "test:web": "npm run test:e2e --workspace mobile/app && npm run test:e2e --workspace admin/dashboard"
+  },
+  "overrides": {
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "react-test-renderer": "19.0.0"
+  },
+  "dependencies": {
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.0"
+  }
+}

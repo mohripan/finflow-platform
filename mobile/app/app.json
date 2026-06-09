@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "FinFlow",
+    "slug": "finflow",
+    "scheme": "finflow",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["android", "web"],
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

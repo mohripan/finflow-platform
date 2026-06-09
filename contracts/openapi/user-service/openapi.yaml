@@ -1,0 +1,101 @@
+openapi: 3.1.0
+info:
+  title: FinFlow User Service API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/users/me:
+    get:
+      summary: Create or load current user profile
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      summary: Update current user profile preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  maxLength: 120
+                preferredLanguage:
+                  type: string
+                  maxLength: 16
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileResponse"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Unauthorized:
+      description: Missing or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    UserProfileResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [userId, email, status, customerAccount, createdAt, updatedAt]
+          properties:
+            userId: { type: string, pattern: "^usr_" }
+            email: { type: string, format: email }
+            phoneNumber: { type: [string, "null"] }
+            displayName: { type: [string, "null"] }
+            preferredLanguage: { type: string }
+            status: { type: string, enum: [ACTIVE, SUSPENDED, CLOSED] }
+            customerAccount:
+              type: object
+              required: [customerId, status]
+              properties:
+                customerId: { type: string, pattern: "^cus_" }
+                status:
+                  type: string
+                  enum: [REGISTERED, KYC_IN_REVIEW, KYC_APPROVED, WALLET_ACTIVE, FROZEN, CLOSED, KYC_REJECTED, KYC_RESUBMISSION_REQUIRED, KYC_LOCKED]
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+        meta:
+          $ref: "#/components/schemas/ApiMeta"
+    ErrorEnvelope:
+      type: object
+      required: [error, meta]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object }
+        meta:
+          $ref: "#/components/schemas/ApiMeta"
+    ApiMeta:
+      type: object
+      required: [correlationId]
+      properties:
+        correlationId: { type: string }

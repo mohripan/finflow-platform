@@ -1,0 +1,99 @@
+openapi: 3.1.0
+info:
+  title: FinFlow KYC Service API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/kyc/me:
+    get:
+      summary: Get current user's KYC status or submitted application
+      responses:
+        "200":
+          description: Current KYC state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KycResponse"
+  /api/v1/kyc/me/submissions:
+    post:
+      summary: Submit customer KYC metadata for review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [legalName, dateOfBirth, nationalIdentityNumber, phoneNumber, address]
+              properties:
+                legalName: { type: string, maxLength: 120 }
+                dateOfBirth: { type: string, format: date }
+                nationalIdentityNumber:
+                  type: string
+                  minLength: 8
+                  maxLength: 32
+                phoneNumber:
+                  type: string
+                  pattern: "^\\+?[0-9]{8,16}$"
+                address: { type: string, maxLength: 500 }
+      responses:
+        "202":
+          description: KYC submission accepted for review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KycResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    KycResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [status]
+          properties:
+            applicationId: { type: string, pattern: "^kyc_" }
+            status: { type: string, enum: [NOT_SUBMITTED, PENDING_REVIEW, APPROVED, REJECTED, RESUBMISSION_REQUIRED, LOCKED] }
+            legalName: { type: string }
+            dateOfBirth: { type: string, format: date }
+            phoneNumber: { type: string }
+            address: { type: string }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+        meta:
+          $ref: "#/components/schemas/ApiMeta"
+    ErrorEnvelope:
+      type: object
+      required: [error, meta]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object }
+        meta:
+          $ref: "#/components/schemas/ApiMeta"
+    ApiMeta:
+      type: object
+      required: [correlationId]
+      properties:
+        correlationId: { type: string }
