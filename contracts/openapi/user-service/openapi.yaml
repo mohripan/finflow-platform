@@ -41,6 +41,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserProfileResponse"
+  /api/v1/users/internal/customer-status:
+    post:
+      summary: Synchronize customer lifecycle status from KYC review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [keycloakSubject, status]
+              properties:
+                keycloakSubject: { type: string }
+                status:
+                  type: string
+                  enum: [KYC_APPROVED, KYC_REJECTED, KYC_RESUBMISSION_REQUIRED, KYC_LOCKED]
+      responses:
+        "200":
+          description: Updated user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileResponse"
+        "422":
+          description: Business rule violation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 components:
   securitySchemes:
     bearerAuth:

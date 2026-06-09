@@ -96,6 +96,7 @@ Rules:
 - `REGISTERED` customers can sign in and submit KYC, but cannot transact.
 - `KYC_IN_REVIEW` mirrors that KYC Service has an application in `PENDING_REVIEW`.
 - `KYC_APPROVED` customers are eligible for wallet activation.
+- KYC approval synchronizes the User Service customer account to `KYC_APPROVED`; wallet activation remains a separate Wallet Service workflow.
 - `WALLET_ACTIVE` customers can top up, transfer, and pay merchants.
 - `FROZEN` customers can sign in and view history but cannot initiate money movement.
 - `CLOSED` customers cannot transact and should only retain audit/history access where required.

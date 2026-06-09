@@ -1,0 +1,44 @@
+name: Customer Onboarding
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  onboarding:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run backend onboarding tests
+        run: mvn test
+
+      - name: Run frontend unit tests
+        run: npm test
+
+      - name: Run onboarding browser automation
+        run: npm run test:web

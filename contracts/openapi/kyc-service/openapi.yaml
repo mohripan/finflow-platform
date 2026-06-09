@@ -47,6 +47,62 @@ paths:
                 $ref: "#/components/schemas/KycResponse"
         "400":
           $ref: "#/components/responses/ValidationError"
+  /api/v1/kyc/admin/applications:
+    get:
+      summary: List KYC applications for admin review
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PENDING_REVIEW, APPROVED, REJECTED, RESUBMISSION_REQUIRED, LOCKED]
+      responses:
+        "200":
+          description: KYC review queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KycApplicationListResponse"
+  /api/v1/kyc/admin/applications/{applicationId}/decisions:
+    post:
+      summary: Record an admin KYC decision
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^kyc_"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, reason]
+              properties:
+                decision:
+                  type: string
+                  enum: [APPROVE, REJECT, REQUEST_RESUBMISSION]
+                reason:
+                  type: string
+                  maxLength: 500
+      responses:
+        "200":
+          description: Recorded KYC decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KycResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "422":
+          description: Business rule violation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 components:
   securitySchemes:
     bearerAuth:
@@ -66,19 +122,39 @@ components:
       required: [data, meta]
       properties:
         data:
-          type: object
-          required: [status]
-          properties:
-            applicationId: { type: string, pattern: "^kyc_" }
-            status: { type: string, enum: [NOT_SUBMITTED, PENDING_REVIEW, APPROVED, REJECTED, RESUBMISSION_REQUIRED, LOCKED] }
-            legalName: { type: string }
-            dateOfBirth: { type: string, format: date }
-            phoneNumber: { type: string }
-            address: { type: string }
-            createdAt: { type: string, format: date-time }
-            updatedAt: { type: string, format: date-time }
+          $ref: "#/components/schemas/KycApplication"
         meta:
           $ref: "#/components/schemas/ApiMeta"
+    KycApplicationListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [applications]
+          properties:
+            applications:
+              type: array
+              items:
+                $ref: "#/components/schemas/KycApplication"
+        meta:
+          $ref: "#/components/schemas/ApiMeta"
+    KycApplication:
+      type: object
+      required: [status]
+      properties:
+        applicationId: { type: string, pattern: "^kyc_" }
+        status: { type: string, enum: [NOT_SUBMITTED, PENDING_REVIEW, APPROVED, REJECTED, RESUBMISSION_REQUIRED, LOCKED] }
+        legalName: { type: string }
+        dateOfBirth: { type: string, format: date }
+        phoneNumber: { type: string }
+        address: { type: string }
+        rejectionCount: { type: integer, minimum: 0 }
+        reviewedBy: { type: [string, "null"] }
+        reviewReason: { type: [string, "null"] }
+        reviewedAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     ErrorEnvelope:
       type: object
       required: [error, meta]

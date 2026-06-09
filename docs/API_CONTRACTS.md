@@ -431,7 +431,42 @@ Query:
 - `cursor`
 - `size`
 
-### `POST /admin/applications/{applicationId}/decision`
+### `GET /admin/applications`
+
+Roles:
+
+- `ADMIN`
+- `COMPLIANCE`
+- `SUPPORT`
+
+Query parameters:
+
+- `status`: optional KYC status filter. The implemented customer onboarding queue uses `PENDING_REVIEW`.
+
+Response data:
+
+```json
+{
+  "applications": [
+    {
+      "applicationId": "kyc_01HY...",
+      "status": "PENDING_REVIEW",
+      "legalName": "Ayu Lestari",
+      "dateOfBirth": "1996-05-20",
+      "phoneNumber": "+6281234567890",
+      "address": "Jakarta Selatan",
+      "rejectionCount": 0,
+      "reviewedBy": null,
+      "reviewReason": null,
+      "reviewedAt": null,
+      "createdAt": "2026-06-09T00:00:00Z",
+      "updatedAt": "2026-06-09T00:00:00Z"
+    }
+  ]
+}
+```
+
+### `POST /admin/applications/{applicationId}/decisions`
 
 Roles:
 
@@ -456,6 +491,13 @@ Decision values:
 - `APPROVE`
 - `REJECT`
 - `REQUEST_RESUBMISSION`
+
+Behavior:
+
+- Decision records are append-only in KYC Service.
+- KYC Service synchronizes customer lifecycle state to User Service through `POST /api/v1/users/internal/customer-status`.
+- `APPROVE` maps to `KYC_APPROVED`, `REJECT` maps to `KYC_REJECTED`, `REQUEST_RESUBMISSION` maps to `KYC_RESUBMISSION_REQUIRED`, and a third rejection maps to `KYC_LOCKED`.
+- Wallet activation is not performed by this endpoint. The Wallet Service owns wallet creation in the wallet/ledger phase.
 
 ### `POST /admin/applications/{applicationId}/unlock`
 

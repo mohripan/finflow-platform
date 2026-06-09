@@ -114,6 +114,11 @@ Exit criteria:
 - Unapproved customers and merchants cannot perform wallet transactions.
 - KYC decisions are auditable.
 
+Current implementation note:
+
+- Customer KYC submission, admin queue, admin decision, append-only KYC decision records, and User Service customer lifecycle synchronization are implemented for the customer onboarding slice.
+- Wallet activation after approved KYC remains in Phase 3 because the Wallet Service and Ledger Service slices are not present yet.
+
 ## Phase 3: Wallet And Ledger Core
 
 Goal: implement financial correctness foundation.

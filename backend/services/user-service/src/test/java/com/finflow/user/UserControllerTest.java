@@ -1,9 +1,11 @@
 package com.finflow.user;
 
+import com.finflow.user.infrastructure.persistence.UserProfileRepository;
 import static org.hamcrest.Matchers.equalTo;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -58,5 +60,24 @@ class UserControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.displayName", equalTo("Bima")))
         .andExpect(jsonPath("$.data.preferredLanguage", equalTo("id-ID")));
+  }
+
+  @Test
+  void syncsCustomerStatusFromKycReview() throws Exception {
+    var customerJwt = jwt()
+        .jwt(token -> token.subject("kc-subject-3").claim("email", "citra@example.test"))
+        .authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"));
+
+    mvc.perform(get("/api/v1/users/me").with(customerJwt))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.customerAccount.status", equalTo("REGISTERED")));
+
+    mvc.perform(post("/api/v1/users/internal/customer-status")
+            .with(jwt().jwt(token -> token.subject("admin-subject"))
+                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"keycloakSubject\":\"kc-subject-3\",\"status\":\"KYC_APPROVED\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.customerAccount.status", equalTo("KYC_APPROVED")));
   }
 }
